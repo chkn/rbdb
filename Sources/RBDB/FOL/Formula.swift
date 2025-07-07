@@ -29,7 +29,7 @@ public enum Formula: Symbol {
 
 	public var type: SymbolType {
 		switch self {
-		case .predicate(let name, let args): .predicate(name: name, arity: UInt8(args.count))
+		case .predicate(let name, _): .predicate(name: name)
 		case .quantified(_, _, let body): .quantified(body.type)
 		}
 	}
@@ -41,10 +41,9 @@ extension Formula: Codable {
 		let key = try arr.decode(SymbolType.self)
 
 		switch key {
-		case .predicate(let name, let arity):
+		case .predicate(let name):
 			var args: [Term] = []
-			args.reserveCapacity(Int(arity))
-			for _ in 0..<arity {
+			while !arr.isAtEnd {
 				args.append(try arr.decode(Term.self))
 			}
 			self = .predicate(name: name, arguments: args)
@@ -59,7 +58,7 @@ extension Formula: Codable {
 		var arr = encoder.unkeyedContainer()
 		switch self {
 		case .predicate(let name, let args):
-			try arr.encode(SymbolType.predicate(name: name, arity: UInt8(args.count)))
+			try arr.encode(SymbolType.predicate(name: name))
 			for arg in args {
 				try arr.encode(arg)
 			}

@@ -12,8 +12,7 @@ public enum SymbolType: Comparable {
 	}
 
 	// formulas
-	/// Maximum arity is 9
-	case predicate(name: String, arity: UInt8)
+	case predicate(name: String)
 	indirect case quantified(SymbolType)
 
 	public var isFormula: Bool {
@@ -36,10 +35,6 @@ extension SymbolType: Codable {
 	}
 
 	public func encode(to encoder: Encoder) throws {
-		// Validate
-		if case .predicate(name: _, arity: let arity) = self, arity > 9 {
-			throw EncodingError.invalidValue(arity, EncodingError.Context(codingPath: encoder.codingPath, debugDescription: "Predicate arity must be less than or equal to 9"))
-		}
 		var container = encoder.singleValueContainer()
 		try container.encode(stringValue)
 	}
@@ -51,7 +46,7 @@ extension SymbolType: CodingKey {
 		switch self {
 		case .constant: ""
 		case .variable: "id"
-		case .predicate(name: let name, arity: let arity): String(arity) + name
+		case .predicate(name: let name): "_\(name)"
 		case .quantified(let ty): "\(ty.stringValue)#"
 		}
 	}
@@ -60,14 +55,13 @@ extension SymbolType: CodingKey {
 			let str = String(stringValue.dropLast())
 			guard let ty = SymbolType(stringValue: str) else { return nil }
 			self = .quantified(ty)
+		} else if stringValue.first == "_" {
+			self = .predicate(name: String(stringValue.dropFirst()))
 		} else {
 			switch stringValue {
 			case "": self = .constant
 			case "id": self = .variable
-			default:
-				var str = stringValue
-				guard let arity = UInt8(String(str.removeFirst())) else { return nil }
-				self = .predicate(name: str, arity: arity)
+			default: return nil
 			}
 		}
 	}
