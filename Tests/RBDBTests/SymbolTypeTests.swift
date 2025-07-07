@@ -11,13 +11,13 @@ import Testing
 }
 
 @Test func serializeRelationType() async throws {
-	try assertJSON(SymbolType.predicate(name: "Foo"), expect: "\"_Foo\"")
+	try assertJSON(SymbolType.predicate(name: "Foo"), expect: "\"@Foo\"")
 }
 
 @Test func serializeQuantifiedType() async throws {
-    try assertJSON(SymbolType.quantified(.predicate(name: "Foo")), expect: "\"_Foo#\"")
+    try assertJSON(SymbolType.quantified(.predicate(name: "Foo")), expect: "\"@Foo#\"")
 }
 
 @Test func serializeNestedQuantifiedType() async throws {
-    try assertJSON(SymbolType.quantified(.quantified(.predicate(name: "Foo"))), expect: "\"_Foo##\"")
+    try assertJSON(SymbolType.quantified(.quantified(.predicate(name: "Foo"))), expect: "\"@Foo##\"")
 }

@@ -46,7 +46,7 @@ extension SymbolType: CodingKey {
 		switch self {
 		case .constant: ""
 		case .variable: "id"
-		case .predicate(name: let name): "_\(name)"
+		case .predicate(name: let name): "@\(name)"
 		case .quantified(let ty): "\(ty.stringValue)#"
 		}
 	}
@@ -55,7 +55,7 @@ extension SymbolType: CodingKey {
 			let str = String(stringValue.dropLast())
 			guard let ty = SymbolType(stringValue: str) else { return nil }
 			self = .quantified(ty)
-		} else if stringValue.first == "_" {
+		} else if stringValue.first == "@" {
 			self = .predicate(name: String(stringValue.dropFirst()))
 		} else {
 			switch stringValue {

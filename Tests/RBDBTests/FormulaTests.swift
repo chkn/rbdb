@@ -3,7 +3,7 @@ import Testing
 @testable import RBDB
 
 @Test func serializePredicate() async throws {
-	try assertJSON(Formula.predicate(name: "Foo", arguments: [Term.string("bar")]), expect: "[\"_Foo\",{\"\":\"bar\"}]")
+	try assertJSON(Formula.predicate(name: "Foo", arguments: [Term.string("bar")]), expect: "[\"@Foo\",{\"\":\"bar\"}]")
 }
 
 @Test func deserializeBadPredicate() async throws {
@@ -16,5 +16,5 @@ import Testing
 
 @Test func serializeQuantified() async throws {
 	let a = Var(id: 0)
-	try assertJSON(Formula.quantified(.forAll, a, Formula.predicate(name: "Foo", arguments: [.variable(a)])), expect: "[\"_Foo#\",0,0,[\"_Foo\",{\"id\":0}]]")
+	try assertJSON(Formula.quantified(.forAll, a, Formula.predicate(name: "Foo", arguments: [.variable(a)])), expect: "[\"@Foo#\",0,0,[\"@Foo\",{\"id\":0}]]")
 }
