@@ -1,5 +1,6 @@
 import Foundation
 import RBDB
+import Darwin
 
 func printUsage() {
     print("Usage: sql <database_path>")
@@ -60,6 +61,92 @@ func stringValue(_ value: Any?) -> String {
     }
 }
 
+func setupRawMode() {
+    var raw = termios()
+    tcgetattr(STDIN_FILENO, &raw)
+    raw.c_lflag &= ~(UInt(ECHO | ICANON))
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+}
+
+func restoreTerminal() {
+    var cooked = termios()
+    tcgetattr(STDIN_FILENO, &cooked)
+    cooked.c_lflag |= UInt(ECHO | ICANON)
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &cooked)
+}
+
+func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> String? {
+    var line = ""
+    var cursorPos = 0
+
+    while true {
+        let char = getchar()
+
+        if char == 27 { // ESC sequence
+            let next1 = getchar()
+            let next2 = getchar()
+
+            if next1 == 91 { // [ character
+                switch next2 {
+                case 65: // Up arrow
+                    if historyIndex > 0 {
+                        historyIndex -= 1
+                        // Clear current line
+                        print("\r\u{001B}[K", terminator: "")
+                        line = history[historyIndex]
+                        cursorPos = line.count
+                        print("sql> \(line)", terminator: "")
+                        fflush(stdout)
+                    }
+                case 66: // Down arrow
+                    if historyIndex < history.count - 1 {
+                        historyIndex += 1
+                        // Clear current line
+                        print("\r\u{001B}[K", terminator: "")
+                        line = history[historyIndex]
+                        cursorPos = line.count
+                        print("sql> \(line)", terminator: "")
+                        fflush(stdout)
+                    } else if historyIndex == history.count - 1 {
+                        historyIndex = history.count
+                        // Clear current line
+                        print("\r\u{001B}[K", terminator: "")
+                        line = ""
+                        cursorPos = 0
+                        print("sql> ", terminator: "")
+                        fflush(stdout)
+                    }
+                default:
+                    break
+                }
+            }
+        } else if char == 10 || char == 13 { // Enter
+            print()
+            return line
+        } else if char == 127 { // Backspace
+            if cursorPos > 0 {
+                line.remove(at: line.index(line.startIndex, offsetBy: cursorPos - 1))
+                cursorPos -= 1
+                print("\r\u{001B}[K", terminator: "")
+                print("sql> \(line)", terminator: "")
+                fflush(stdout)
+            }
+        } else if char >= 32 && char <= 126 { // Printable characters
+            let character = Character(UnicodeScalar(Int(char))!)
+            line.insert(character, at: line.index(line.startIndex, offsetBy: cursorPos))
+            cursorPos += 1
+            print("\r\u{001B}[K", terminator: "")
+            print("sql> \(line)", terminator: "")
+            fflush(stdout)
+        } else if char == 4 { // Ctrl+D (EOF)
+            if line.isEmpty {
+                print()
+                return nil
+            }
+        }
+    }
+}
+
 func main() {
     let args = CommandLine.arguments
 
@@ -84,11 +171,25 @@ func main() {
     print("Type '.exit' to quit")
     print()
 
+    // Command history
+    var history: [String] = []
+    var historyIndex = 0
+
+    // Setup raw terminal mode for arrow key handling
+    setupRawMode()
+
+    // Setup signal handler to restore terminal on exit
+    signal(SIGINT) { _ in
+        restoreTerminal()
+        exit(0)
+    }
+
     // Main loop
     while true {
         print("sql> ", terminator: "")
+        fflush(stdout)
 
-        guard let input = readLine() else {
+        guard let input = readLineWithHistory(history: &history, historyIndex: &historyIndex) else {
             break
         }
 
@@ -102,6 +203,12 @@ func main() {
             break
         }
 
+        // Add to history if it's not empty and not the same as the last command
+        if !command.isEmpty && (history.isEmpty || history.last != command) {
+            history.append(command)
+        }
+        historyIndex = history.count
+
         // Execute SQL command
         do {
 			let results = try database.query(command)
@@ -112,6 +219,9 @@ func main() {
 
         print()
     }
+
+    // Restore terminal mode
+    restoreTerminal()
 
     print("Goodbye!")
 }
