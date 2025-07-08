@@ -14,6 +14,9 @@ let package = Package(
 		.library(
 			name: "RBDB",
 			targets: ["RBDB"]),
+		.executable(
+			name: "sql",
+			targets: ["SQLCLITool"]),
 	],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -21,6 +24,10 @@ let package = Package(
         .target(
 			name: "RBDB"
 		),
+        .executableTarget(
+            name: "SQLCLITool",
+            dependencies: ["RBDB"]
+        ),
         .testTarget(
             name: "RBDBTests",
             dependencies: ["RBDB"]

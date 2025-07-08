@@ -1,16 +1,16 @@
 import Foundation
 import SQLite3
 
-enum SqliteError: Error {
+public enum SqliteError: Error {
 	case couldNotOpenDatabase(String)
 	case couldNotRegisterFunction(name: String)
 	case queryOrExecuteError(String)
 }
 
-class SQLiteDatabase {
+public class SQLiteDatabase {
 	private var db: OpaquePointer?
 
-	init(path: String) throws {
+	public init(path: String) throws {
 		if sqlite3_open_v2(path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) != SQLITE_OK {
 			let errmsg = String(cString: sqlite3_errmsg(db!))
 			sqlite3_close(db)
@@ -38,7 +38,7 @@ class SQLiteDatabase {
 		sqlite3_close(db)
 	}
 
-	func execute(_ sql: String) throws {
+	public func execute(_ sql: String) throws {
 		var err: UnsafeMutablePointer<CChar>? = nil
 		let result = sqlite3_exec(db, sql, nil, nil, &err)
 		if result != SQLITE_OK {
@@ -48,7 +48,7 @@ class SQLiteDatabase {
 		}
 	}
 
-	func query(_ sql: String) throws -> [[String: Any]] {
+	public func query(_ sql: String) throws -> [[String: Any]] {
 		var statement: OpaquePointer?
 		var results: [[String: Any]] = []
 		guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
