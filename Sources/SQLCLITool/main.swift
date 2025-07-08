@@ -3,19 +3,20 @@ import RBDB
 import Darwin
 
 func printUsage() {
-    print("Usage: sql [database_path]")
+    print("Usage: sql [options] [database_path]")
     print("  Interactive SQLite database console")
     print("")
     print("Arguments:")
-    print("  database_path    Path to SQLite database file (optional)")
-    print("                   If not provided, uses in-memory database")
+    print("  database_path        Path to SQLite database file (optional)")
+    print("                       If not provided, uses in-memory database")
     print("")
     print("Options:")
-    print("  --help          Show this help message")
+    print("  --help               Show this help message")
+    print("  -f | --file <path>   Execute the SQL commands from the given file")
     print("")
     print("Commands:")
-    print("  .exit           Exit the console")
-    print("  .schema         Show database schema")
+    print("  .exit                Exit the console")
+    print("  .schema              Show database schema")
 }
 
 func displaySchema(database: SQLiteDatabase) {
@@ -47,6 +48,69 @@ func displaySchema(database: SQLiteDatabase) {
         }
     } catch {
         print("Error displaying schema: \(error)")
+    }
+}
+
+func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool {
+    do {
+        let content = try String(contentsOfFile: filePath)
+
+        // Split by semicolon to handle multi-line SQL statements
+        let statements = content.components(separatedBy: ";")
+
+        print("Executing commands from file: \(filePath)")
+
+        for statement in statements {
+            // Remove comments and normalize whitespace
+            let lines = statement.components(separatedBy: .newlines)
+                .map { line in
+                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Remove comments but keep the rest of the line
+                    if let commentIndex = trimmed.firstIndex(of: Character("-")), trimmed[trimmed.index(after: commentIndex)] == "-" {
+                        let beforeComment = String(trimmed[..<commentIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if beforeComment.isEmpty {
+                            return ""
+                        }
+                        return beforeComment
+                    }
+                    return trimmed
+                }
+                .filter { !$0.isEmpty }
+
+            let cleanStatement = lines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if cleanStatement.isEmpty {
+                continue
+            }
+
+            if cleanStatement == ".schema" {
+                displaySchema(database: database)
+                continue
+            }
+
+            if cleanStatement == ".exit" {
+                return false // Signal to exit
+            }
+
+            print("sql> \(cleanStatement)")
+            do {
+                let results = try database.query(cleanStatement)
+                if !results.isEmpty {
+                    print(formatTable(results))
+                } else {
+                    print("Command executed successfully.")
+                }
+            } catch {
+                print("Error executing command '\(cleanStatement)': \(error)")
+            }
+            print()
+        }
+
+        print("File execution completed.")
+        return true // Continue to interactive mode
+    } catch {
+        print("Error reading file '\(filePath)': \(error)")
+        exit(1)
     }
 }
 
@@ -199,21 +263,36 @@ func main() {
         exit(0)
     }
 
-    // Determine database path
-    let dbPath: String
-    let isInMemory: Bool
+    // Parse arguments
+    var dbPath: String = ":memory:"
+    var isInMemory: Bool = true
+    var sqlFile: String? = nil
 
-    if args.count == 1 {
-        // No path provided, use in-memory database
-        dbPath = ":memory:"
-        isInMemory = true
-    } else if args.count == 2 {
-        // Path provided
-        dbPath = args[1]
-        isInMemory = false
-    } else {
-        printUsage()
-        exit(1)
+    var i = 1
+    while i < args.count {
+        let arg = args[i]
+
+        if arg == "--file" || arg == "-f" {
+            if i + 1 >= args.count {
+                print("Error: --file requires a file path")
+                printUsage()
+                exit(1)
+            }
+            sqlFile = args[i + 1]
+            i += 2
+        } else if arg.hasPrefix("--file=") {
+            sqlFile = String(arg.dropFirst(7))
+            i += 1
+        } else if !arg.hasPrefix("-") {
+            // This is the database path
+            dbPath = arg
+            isInMemory = false
+            i += 1
+        } else {
+            print("Error: Unknown option '\(arg)'")
+            printUsage()
+            exit(1)
+        }
     }
 
     // Initialize database
@@ -233,6 +312,16 @@ func main() {
     }
     print("Type '.exit' to quit, '.schema' to show database schema")
     print()
+
+    // Execute SQL file if provided
+    if let sqlFile = sqlFile {
+        let shouldContinue = executeCommandsFromFile(filePath: sqlFile, database: database)
+        if !shouldContinue {
+            print("Goodbye!")
+            exit(0)
+        }
+        print()
+    }
 
     // Command history
     var history: [String] = []
