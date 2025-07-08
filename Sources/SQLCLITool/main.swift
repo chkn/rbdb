@@ -7,6 +7,38 @@ func printUsage() {
     print("  Interactive SQLite database console")
 }
 
+func displaySchema(database: SQLiteDatabase) {
+    do {
+        let results = try database.query("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name")
+
+        if results.isEmpty {
+            print("No schema objects found.")
+            return
+        }
+
+        var currentType = ""
+        for row in results {
+            let type = row["type"] as? String ?? ""
+            let name = row["name"] as? String ?? ""
+            let sql = row["sql"] as? String ?? ""
+
+            if type != currentType {
+                currentType = type
+                print("\n-- \(type.uppercased())S")
+                print(String(repeating: "-", count: 50))
+            }
+
+            print("\(name):")
+            if !sql.isEmpty {
+                print("  \(sql)")
+            }
+            print()
+        }
+    } catch {
+        print("Error displaying schema: \(error)")
+    }
+}
+
 func formatTable(_ rows: [[String: Any]]) -> String {
     guard !rows.isEmpty else { return "No results." }
 
@@ -168,7 +200,7 @@ func main() {
 
     print("SQLite Interactive Console")
     print("Database: \(dbPath)")
-    print("Type '.exit' to quit")
+    print("Type '.exit' to quit, '.schema' to show database schema")
     print()
 
     // Command history
@@ -201,6 +233,12 @@ func main() {
 
         if command == ".exit" {
             break
+        }
+
+        if command == ".schema" {
+            displaySchema(database: database)
+            print()
+            continue
         }
 
         // Add to history if it's not empty and not the same as the last command
