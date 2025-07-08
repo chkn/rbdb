@@ -3,8 +3,19 @@ import RBDB
 import Darwin
 
 func printUsage() {
-    print("Usage: sql <database_path>")
+    print("Usage: sql [database_path]")
     print("  Interactive SQLite database console")
+    print("")
+    print("Arguments:")
+    print("  database_path    Path to SQLite database file (optional)")
+    print("                   If not provided, uses in-memory database")
+    print("")
+    print("Options:")
+    print("  --help          Show this help message")
+    print("")
+    print("Commands:")
+    print("  .exit           Exit the console")
+    print("  .schema         Show database schema")
 }
 
 func displaySchema(database: SQLiteDatabase) {
@@ -182,12 +193,28 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> St
 func main() {
     let args = CommandLine.arguments
 
-    guard args.count == 2 else {
+    // Handle --help
+    if args.contains("--help") {
+        printUsage()
+        exit(0)
+    }
+
+    // Determine database path
+    let dbPath: String
+    let isInMemory: Bool
+
+    if args.count == 1 {
+        // No path provided, use in-memory database
+        dbPath = ":memory:"
+        isInMemory = true
+    } else if args.count == 2 {
+        // Path provided
+        dbPath = args[1]
+        isInMemory = false
+    } else {
         printUsage()
         exit(1)
     }
-
-    let dbPath = args[1]
 
     // Initialize database
     let database: SQLiteDatabase
@@ -199,7 +226,11 @@ func main() {
     }
 
     print("SQLite Interactive Console")
-    print("Database: \(dbPath)")
+    if isInMemory {
+        print("Database: In-memory database")
+    } else {
+        print("Database: \(dbPath)")
+    }
     print("Type '.exit' to quit, '.schema' to show database schema")
     print()
 
