@@ -182,6 +182,20 @@ func restoreTerminal() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &cooked)
 }
 
+func redrawLineWithCursor(line: String, cursorPos: Int) {
+    // Clear the line and redraw with cursor positioning
+    print("\r\u{001B}[K", terminator: "")
+    print("sql> \(line)", terminator: "")
+
+    // Move cursor to the correct position
+    if cursorPos < line.count {
+        let moveBack = line.count - cursorPos
+        print("\u{001B}[\(moveBack)D", terminator: "")
+    }
+
+    fflush(stdout)
+}
+
 func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> String? {
     var line = ""
     var cursorPos = 0
@@ -223,6 +237,24 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> St
                         print("sql> ", terminator: "")
                         fflush(stdout)
                     }
+                case 67: // Right arrow
+                    if cursorPos < line.count {
+                        cursorPos += 1
+                        redrawLineWithCursor(line: line, cursorPos: cursorPos)
+                    }
+                case 68: // Left arrow
+                    if cursorPos > 0 {
+                        cursorPos -= 1
+                        redrawLineWithCursor(line: line, cursorPos: cursorPos)
+                    }
+                case 51: // Delete key (ESC[3~)
+                    let next3 = getchar()
+                    if next3 == 126 { // ~ character
+                        if cursorPos < line.count {
+                            line.remove(at: line.index(line.startIndex, offsetBy: cursorPos))
+                            redrawLineWithCursor(line: line, cursorPos: cursorPos)
+                        }
+                    }
                 default:
                     break
                 }
@@ -234,17 +266,13 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> St
             if cursorPos > 0 {
                 line.remove(at: line.index(line.startIndex, offsetBy: cursorPos - 1))
                 cursorPos -= 1
-                print("\r\u{001B}[K", terminator: "")
-                print("sql> \(line)", terminator: "")
-                fflush(stdout)
+                redrawLineWithCursor(line: line, cursorPos: cursorPos)
             }
         } else if char >= 32 && char <= 126 { // Printable characters
             let character = Character(UnicodeScalar(Int(char))!)
             line.insert(character, at: line.index(line.startIndex, offsetBy: cursorPos))
             cursorPos += 1
-            print("\r\u{001B}[K", terminator: "")
-            print("sql> \(line)", terminator: "")
-            fflush(stdout)
+            redrawLineWithCursor(line: line, cursorPos: cursorPos)
         } else if char == 4 { // Ctrl+D (EOF)
             if line.isEmpty {
                 print()
