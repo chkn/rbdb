@@ -45,7 +45,7 @@ extension SymbolType: CodingKey {
 	public var stringValue: String {
 		switch self {
 		case .constant: ""
-		case .variable: "id"
+		case .variable: "v"
 		case .predicate(name: let name): "@\(name)"
 		case .quantified(let ty): "\(ty.stringValue)#"
 		}
@@ -60,7 +60,7 @@ extension SymbolType: CodingKey {
 		} else {
 			switch stringValue {
 			case "": self = .constant
-			case "id": self = .variable
+			case "v": self = .variable
 			default: return nil
 			}
 		}

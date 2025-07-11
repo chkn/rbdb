@@ -24,7 +24,7 @@ extension Term: Codable {
 		if let key = container.allKeys.sorted().last(where: { $0.isTerm }) {
 			switch key {
 			case .variable:
-				self = .variable(Var(id: try container.decode(Int.self, forKey: key)))
+				self = .variable(Var(id: try container.decode(UInt8.self, forKey: key)))
 
 			// This is a bit naughty, but it keeps the json very concise. We could store the expected constant
 			//  data type in SymbolType, but that opens the door to data anomalies where the actual type of the

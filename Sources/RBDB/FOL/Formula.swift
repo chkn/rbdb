@@ -48,7 +48,7 @@ extension Formula: Codable {
 			}
 			self = .predicate(name: name, arguments: args)
 		case .quantified:
-			self = .quantified(try arr.decode(Quantifier.self), Var(id: try arr.decode(Int.self)), try arr.decode(Formula.self))
+			self = .quantified(try arr.decode(Quantifier.self), Var(id: try arr.decode(UInt8.self)), try arr.decode(Formula.self))
 		default:
 			throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "No valid formula symbol type key found"))
 		}

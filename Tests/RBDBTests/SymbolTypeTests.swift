@@ -7,7 +7,7 @@ import Testing
 }
 
 @Test func serializeVariableType() async throws {
-	try assertJSON(SymbolType.variable, expect: "\"id\"")
+	try assertJSON(SymbolType.variable, expect: "\"v\"")
 }
 
 @Test func serializeRelationType() async throws {

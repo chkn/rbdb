@@ -3,7 +3,7 @@ import Testing
 @testable import RBDB
 
 @Test func serializeVariable() async throws {
-	try assertJSON(Term.variable(Var(id: 42)), expect: "{\"id\":42}")
+	try assertJSON(Term.variable(Var(id: 42)), expect: "{\"v\":42}")
 }
 
 @Test func serializeBooleanConstant() async throws {
@@ -57,14 +57,14 @@ import Testing
 
 @Test func deserializePrefersLaterDefinedTypes1() async throws {
 	let dec = JSONDecoder()
-	let data = "{\"\":\"bar\",\"id\":5}".data(using: .utf8)!
+	let data = "{\"\":\"bar\",\"v\":5}".data(using: .utf8)!
 	let result = try dec.decode(Term.self, from: data)
 	#expect(result == .variable(Var(id: 5)))
 }
 
 @Test func deserializePrefersLaterDefinedTypes2() async throws {
 	let dec = JSONDecoder()
-	let data = "{\"id\":5,\"\":\"bar\"}".data(using: .utf8)!
+	let data = "{\"v\":5,\"\":\"bar\"}".data(using: .utf8)!
 	let result = try dec.decode(Term.self, from: data)
 	#expect(result == .variable(Var(id: 5)))
 }
