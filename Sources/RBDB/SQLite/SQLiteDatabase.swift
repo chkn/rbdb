@@ -1,10 +1,10 @@
 import Foundation
 import SQLite3
 
-public enum SqliteError: Error {
+public enum SQLiteError: Error {
 	case couldNotOpenDatabase(String)
 	case couldNotRegisterFunction(name: String)
-	case queryOrExecuteError(String)
+	case queryError(String)
 }
 
 public class SQLiteDatabase {
@@ -14,7 +14,7 @@ public class SQLiteDatabase {
 		if sqlite3_open_v2(path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) != SQLITE_OK {
 			let errmsg = String(cString: sqlite3_errmsg(db!))
 			sqlite3_close(db)
-			throw SqliteError.couldNotOpenDatabase(errmsg)
+			throw SQLiteError.couldNotOpenDatabase(errmsg)
 		}
 
 		// Register the custom uuidv7() function
@@ -30,7 +30,7 @@ public class SQLiteDatabase {
 			)
 		if result != SQLITE_OK {
 			sqlite3_close(db)
-			throw SqliteError.couldNotRegisterFunction(name: "uuidv7")
+			throw SQLiteError.couldNotRegisterFunction(name: "uuidv7")
 		}
 	}
 
@@ -38,22 +38,12 @@ public class SQLiteDatabase {
 		sqlite3_close(db)
 	}
 
-	public func execute(_ sql: String) throws {
-		var err: UnsafeMutablePointer<CChar>? = nil
-		let result = sqlite3_exec(db, sql, nil, nil, &err)
-		if result != SQLITE_OK {
-			let errmsg = String(cString: err!)
-			sqlite3_free(err)
-			throw SqliteError.queryOrExecuteError(errmsg)
-		}
-	}
-
 	public func query(_ sql: String) throws -> [[String: Any]] {
 		var statement: OpaquePointer?
 		var results: [[String: Any]] = []
 		guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
 			let errmsg = String(cString: sqlite3_errmsg(db))
-			throw SqliteError.queryOrExecuteError(errmsg)
+			throw SQLiteError.queryError(errmsg)
 		}
 
 		let columnCount = sqlite3_column_count(statement)
@@ -90,7 +80,10 @@ public class SQLiteDatabase {
 			results.append(row)
 		}
 
-		sqlite3_finalize(statement)
+		guard sqlite3_finalize(statement) == SQLITE_OK else {
+			let errmsg = String(cString: sqlite3_errmsg(db))
+			throw SQLiteError.queryError(errmsg)
+		}
 		return results
 	}
 }
