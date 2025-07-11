@@ -102,6 +102,7 @@ func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
                 }
             } catch {
                 print("Error executing command '\(cleanStatement)': \(error)")
+                return false // Stop execution on error
             }
             print()
         }
