@@ -2,12 +2,14 @@ import Foundation
 import RBDB
 import Darwin
 
+let productName = "RBDB Interactive SQL Console"
+
 func printUsage() {
     print("Usage: sql [options] [database_path]")
-    print("  Interactive SQLite database console")
+    print("  \(productName)")
     print("")
     print("Arguments:")
-    print("  database_path        Path to SQLite database file (optional)")
+    print("  database_path        Path to database file (optional)")
     print("                       If not provided, uses in-memory database")
     print("")
     print("Options:")
@@ -293,15 +295,15 @@ func main() {
     }
 
     // Initialize database
-    let database: SQLiteDatabase
+    let database: RBDB
     do {
-        database = try SQLiteDatabase(path: dbPath)
+        database = try RBDB(path: dbPath)
     } catch {
         print("Error opening database: \(error)")
         exit(1)
     }
 
-    print("SQLite Interactive Console")
+    print(productName)
     if isInMemory {
         print("Database: In-memory database")
     } else {

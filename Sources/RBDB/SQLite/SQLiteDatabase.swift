@@ -38,6 +38,7 @@ public class SQLiteDatabase {
 		sqlite3_close(db)
 	}
 
+	@discardableResult
 	public func query(_ sql: String) throws -> [[String: Any]] {
 		return try sql.withCString { sqlCString in
 			var finalResults: [[String: Any]] = []
@@ -78,8 +79,6 @@ public class SQLiteDatabase {
 						case SQLITE_FLOAT:
 							let doubleValue = sqlite3_column_double(statement, i)
 							row[columnName] = doubleValue
-						case SQLITE_NULL:
-							row[columnName] = NSNull()
 						default:
 							row[columnName] = NSNull()
 						}
