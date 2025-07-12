@@ -55,56 +55,18 @@ func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
     do {
         let content = try String(contentsOfFile: filePath)
 
-        // Split by semicolon to handle multi-line SQL statements
-        let statements = content.components(separatedBy: ";")
-
         print("Executing commands from file: \(filePath)")
 
-        for statement in statements {
-            // Remove comments and normalize whitespace
-            let lines = statement.components(separatedBy: .newlines)
-                .map { line in
-                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Remove comments but keep the rest of the line
-                    if let commentIndex = trimmed.firstIndex(of: Character("-")), trimmed[trimmed.index(after: commentIndex)] == "-" {
-                        let beforeComment = String(trimmed[..<commentIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-                        if beforeComment.isEmpty {
-                            return ""
-                        }
-                        return beforeComment
-                    }
-                    return trimmed
-                }
-                .filter { !$0.isEmpty }
-
-            let cleanStatement = lines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if cleanStatement.isEmpty {
-                continue
+        do {
+            let results = try database.query(content)
+            if !results.isEmpty {
+                print(formatTable(results))
+            } else {
+                print("Commands executed successfully.")
             }
-
-            if cleanStatement == ".schema" {
-                displaySchema(database: database)
-                continue
-            }
-
-            if cleanStatement == ".exit" {
-                return false // Signal to exit
-            }
-
-            print("sql> \(cleanStatement)")
-            do {
-                let results = try database.query(cleanStatement)
-                if !results.isEmpty {
-                    print(formatTable(results))
-                } else {
-                    print("Command executed successfully.")
-                }
-            } catch {
-                print("Error executing command '\(cleanStatement)': \(error)")
-                return false // Stop execution on error
-            }
-            print()
+        } catch {
+            print("Error executing commands: \(error)")
+            return false // Stop execution on error
         }
 
         print("File execution completed.")

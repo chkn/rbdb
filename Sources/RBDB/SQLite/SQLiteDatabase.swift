@@ -39,51 +39,70 @@ public class SQLiteDatabase {
 	}
 
 	public func query(_ sql: String) throws -> [[String: Any]] {
-		var statement: OpaquePointer?
-		var results: [[String: Any]] = []
-		guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-			let errmsg = String(cString: sqlite3_errmsg(db))
-			throw SQLiteError.queryError(errmsg)
-		}
+		return try sql.withCString { sqlCString in
+			var finalResults: [[String: Any]] = []
+			var remainingSQL: UnsafePointer<CChar>? = sqlCString
 
-		let columnCount = sqlite3_column_count(statement)
+			while let currentSQL = remainingSQL, currentSQL.pointee != 0 {
+				var statement: OpaquePointer?
+				var nextSQL: UnsafePointer<CChar>?
 
-		while sqlite3_step(statement) == SQLITE_ROW {
-			var row: [String: Any] = [:]
-
-			for i in 0..<columnCount {
-				let columnName = String(cString: sqlite3_column_name(statement, i))
-				let columnType = sqlite3_column_type(statement, i)
-
-				switch columnType {
-				case SQLITE_TEXT:
-					let columnValue = String(cString: sqlite3_column_text(statement, i))
-					row[columnName] = columnValue
-				case SQLITE_BLOB:
-					let blobPointer = sqlite3_column_blob(statement, i)
-					let blobSize = sqlite3_column_bytes(statement, i)
-					let blobData = Data(bytes: blobPointer!, count: Int(blobSize))
-					row[columnName] = blobData
-				case SQLITE_INTEGER:
-					let intValue = sqlite3_column_int64(statement, i)
-					row[columnName] = intValue
-				case SQLITE_FLOAT:
-					let doubleValue = sqlite3_column_double(statement, i)
-					row[columnName] = doubleValue
-				case SQLITE_NULL:
-					row[columnName] = NSNull()
-				default:
-					row[columnName] = NSNull()
+				guard sqlite3_prepare_v2(db, currentSQL, -1, &statement, &nextSQL) == SQLITE_OK else {
+					let errmsg = String(cString: sqlite3_errmsg(db))
+					throw SQLiteError.queryError(errmsg)
 				}
+
+				// Execute the current statement
+				var statementResults: [[String: Any]] = []
+				let columnCount = sqlite3_column_count(statement)
+
+				while sqlite3_step(statement) == SQLITE_ROW {
+					var row: [String: Any] = [:]
+
+					for i in 0..<columnCount {
+						let columnName = String(cString: sqlite3_column_name(statement, i))
+						let columnType = sqlite3_column_type(statement, i)
+
+						switch columnType {
+						case SQLITE_TEXT:
+							let columnValue = String(cString: sqlite3_column_text(statement, i))
+							row[columnName] = columnValue
+						case SQLITE_BLOB:
+							let blobPointer = sqlite3_column_blob(statement, i)
+							let blobSize = sqlite3_column_bytes(statement, i)
+							let blobData = Data(bytes: blobPointer!, count: Int(blobSize))
+							row[columnName] = blobData
+						case SQLITE_INTEGER:
+							let intValue = sqlite3_column_int64(statement, i)
+							row[columnName] = intValue
+						case SQLITE_FLOAT:
+							let doubleValue = sqlite3_column_double(statement, i)
+							row[columnName] = doubleValue
+						case SQLITE_NULL:
+							row[columnName] = NSNull()
+						default:
+							row[columnName] = NSNull()
+						}
+					}
+
+					statementResults.append(row)
+				}
+
+				// Finalize the current statement
+				guard sqlite3_finalize(statement) == SQLITE_OK else {
+					let errmsg = String(cString: sqlite3_errmsg(db))
+					throw SQLiteError.queryError(errmsg)
+				}
+
+				// Keep results from the last statement that produced results
+				if !statementResults.isEmpty {
+					finalResults = statementResults
+				}
+
+				// Move to the next statement
+				remainingSQL = nextSQL
 			}
-
-			results.append(row)
+			return finalResults
 		}
-
-		guard sqlite3_finalize(statement) == SQLITE_OK else {
-			let errmsg = String(cString: sqlite3_errmsg(db))
-			throw SQLiteError.queryError(errmsg)
-		}
-		return results
 	}
 }
