@@ -79,7 +79,7 @@ func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
     }
 }
 
-func formatTable(_ rows: [[String: Any]]) -> String {
+func formatTable(_ rows: [[String: Any?]]) -> String {
     guard !rows.isEmpty else { return "No results." }
 
     let columns = Array(rows[0].keys).sorted()
@@ -90,7 +90,7 @@ func formatTable(_ rows: [[String: Any]]) -> String {
     for column in columns {
         columnWidths[column] = column.count
         for row in rows {
-            let valueStr = stringValue(row[column])
+            let valueStr = stringValue(row[column]?.flatMap({$0}))
             columnWidths[column] = max(columnWidths[column] ?? 0, valueStr.count)
         }
     }
@@ -110,7 +110,7 @@ func formatTable(_ rows: [[String: Any]]) -> String {
     // Rows
     for row in rows {
         let rowLine = columns.map { column in
-            let valueStr = stringValue(row[column])
+			let valueStr = stringValue(row[column]?.flatMap({$0}))
             return valueStr.padding(toLength: columnWidths[column]!, withPad: " ", startingAt: 0)
         }.joined(separator: " | ")
         output += rowLine + "\n"
