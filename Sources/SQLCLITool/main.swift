@@ -274,6 +274,12 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> St
             line.insert(character, at: line.index(line.startIndex, offsetBy: cursorPos))
             cursorPos += 1
             redrawLineWithCursor(line: line, cursorPos: cursorPos)
+        } else if char == 1 { // Ctrl+A (beginning of line)
+            cursorPos = 0
+            redrawLineWithCursor(line: line, cursorPos: cursorPos)
+        } else if char == 5 { // Ctrl+E (end of line)
+            cursorPos = line.count
+            redrawLineWithCursor(line: line, cursorPos: cursorPos)
         } else if char == 4 { // Ctrl+D (EOF)
             if line.isEmpty {
                 print()
