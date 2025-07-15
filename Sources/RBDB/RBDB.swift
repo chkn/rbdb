@@ -49,14 +49,11 @@ public class RBDB: SQLiteDatabase {
 				let sqlString = String(cString: normalizedSQL)
 				if sqlString.hasPrefix("CREATE TABLE") {
 					// Find the table name and column definitions manually
-					guard let tableNameAndColumns = extractTableNameAndColumns(from: sqlString) else {
+					guard let tableInfo = extractTableNameAndColumns(from: sqlString) else {
 						throw SQLiteError.queryError("Cannot parse CREATE TABLE statement: \(sqlString)")
 					}
 
-					let tableName = tableNameAndColumns.tableName
-					let columnsDef = tableNameAndColumns.columnsDef
-
-					try handleCreateTable(name: tableName, columnsDef: columnsDef)
+					try handleCreateTable(name: tableInfo.tableName, columnsDef: tableInfo.columnsDef, ifNotExists: tableInfo.ifNotExists)
 
 					// Return empty result set instead of executing the CREATE TABLE
 					return []
@@ -66,7 +63,7 @@ public class RBDB: SQLiteDatabase {
 		return try super.readRows(in: statement)
 	}
 
-	func handleCreateTable(name: String, columnsDef: String) throws {
+	func handleCreateTable(name: String, columnsDef: String, ifNotExists: Bool) throws {
 		// Parse column definitions to extract column names
 		let columnNames = try parseColumnNames(from: columnsDef)
 
@@ -77,8 +74,10 @@ public class RBDB: SQLiteDatabase {
 		try super.query("INSERT INTO entity DEFAULT VALUES")
 
 		// Insert into predicate table using the last inserted entity ID and jsonb function
+		// Use INSERT OR IGNORE if IF NOT EXISTS was specified
+		let orIgnore = ifNotExists ? "OR IGNORE " : ""
 		try super.query("""
-			INSERT INTO predicate (internal_entity_id, name, column_names)
+			INSERT \(orIgnore)INTO predicate (internal_entity_id, name, column_names)
 			VALUES (last_insert_rowid(), ?, jsonb(?))
 		""", parameters: [name, columnNamesJson])
 	}
@@ -146,14 +145,17 @@ public class RBDB: SQLiteDatabase {
 		}
 	}
 
-	private func extractTableNameAndColumns(from sql: String) -> (tableName: String, columnsDef: String)? {
+	private func extractTableNameAndColumns(from sql: String) -> (tableName: String, columnsDef: String, ifNotExists: Bool)? {
 		// Handle CREATE TABLE [IF NOT EXISTS] tableName (columns...)
-		let pattern = #/^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s*([^(]+?)\(/#
+		let pattern = #/^CREATE\s+TABLE(\s+IF\s+NOT\s+EXISTS)?\s*([^(]+?)\(/#
 		guard let match = sql.firstMatch(of: pattern) else {
 			return nil
 		}
 
-		let rawTableName = String(match.1).trimmingCharacters(in: .whitespacesAndNewlines)
+		// Check if IF NOT EXISTS was captured
+		let ifNotExists = match.1 != nil
+
+		let rawTableName = String(match.2).trimmingCharacters(in: .whitespacesAndNewlines)
 		let tableName = rawTableName.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`[]"))
 
 		// Find the opening parenthesis after the table name
@@ -183,7 +185,7 @@ public class RBDB: SQLiteDatabase {
 		let startIndex = sql.index(after: openParenIndex)
 		let columnsDef = String(sql[startIndex..<closeParenIndex])
 
-		return (tableName: tableName, columnsDef: columnsDef)
+		return (tableName: tableName, columnsDef: columnsDef, ifNotExists: ifNotExists)
 	}
 
 	private func rescue(error: SQLiteError) throws -> Bool {

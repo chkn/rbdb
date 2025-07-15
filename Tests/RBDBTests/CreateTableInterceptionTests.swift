@@ -171,4 +171,36 @@ struct CreateTableInterceptionTests {
             #expect(Bool(false), "column_names should be accessible as JSON")
         }
     }
+
+    @Test("CREATE TABLE IF NOT EXISTS silently succeeds when table exists")
+    func createTableIfNotExistsWhenTableExists() async throws {
+        let rbdb = try RBDB(path: ":memory:")
+
+        // First create the table
+        try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+
+        // Verify it was created
+        let initialResults = try rbdb.query("SELECT name FROM predicate WHERE name = ?", parameters: ["test_table"])
+        #expect(initialResults.count == 1, "Should have one predicate record initially")
+
+        // Try to create the same table again with IF NOT EXISTS - should not throw
+        try rbdb.query("CREATE TABLE IF NOT EXISTS test_table (id INTEGER, name TEXT, extra_col TEXT)")
+
+        // Verify we still have only one record (the original one)
+        let finalResults = try rbdb.query("SELECT name FROM predicate WHERE name = ?", parameters: ["test_table"])
+        #expect(finalResults.count == 1, "Should still have only one predicate record")
+    }
+
+    @Test("CREATE TABLE without IF NOT EXISTS fails when table exists")
+    func createTableWithoutIfNotExistsWhenTableExists() async throws {
+        let rbdb = try RBDB(path: ":memory:")
+
+        // First create the table
+        try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+
+        // Try to create the same table again without IF NOT EXISTS - should throw
+        #expect(throws: SQLiteError.self) {
+            try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+        }
+    }
 }
