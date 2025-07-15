@@ -58,11 +58,14 @@ public class SQLiteDatabase {
 					sqlite3_finalize(statement)
 				}
 
-				let statementResults = try readRows(in: statement)
+				// statement will be nil here (but sqlite3_prepare_v2 succeeded) if currentSQL is whitespace
+				if let statement = statement {
+					let statementResults = try readRows(in: statement)
 
-				// Keep results from the last statement that produced results
-				if !statementResults.isEmpty {
-					finalResults = statementResults
+					// Keep results from the last statement that produced results
+					if !statementResults.isEmpty {
+						finalResults = statementResults
+					}
 				}
 
 				// Move to the next statement
@@ -85,6 +88,7 @@ public class SQLiteDatabase {
 			defer {
 				sqlite3_finalize(statement)
 			}
+			guard let statement = statement else { return [] }
 
 			// Check parameter count
 			let expectedParams = Int(sqlite3_bind_parameter_count(statement))
@@ -147,46 +151,47 @@ public class SQLiteDatabase {
 			return try readRows(in: statement)
 		}
 	}
-}
 
-func readRows(in statement: OpaquePointer!) throws -> [[String: Any?]] {
-	var statementResults: [[String: Any?]] = []
-	while true {
-		let stepResult = sqlite3_step(statement)
-		if stepResult == SQLITE_ROW {
-			var row: [String: Any?] = [:]
-			let columnCount = sqlite3_column_count(statement)
-			for i in 0..<columnCount {
-				let columnName = String(cString: sqlite3_column_name(statement, i))
-				let columnType = sqlite3_column_type(statement, i)
-				switch columnType {
-				case SQLITE_TEXT:
-					let columnValue = String(cString: sqlite3_column_text(statement, i))
-					row[columnName] = columnValue
-				case SQLITE_BLOB:
-					let blobPointer = sqlite3_column_blob(statement, i)
-					let blobSize = sqlite3_column_bytes(statement, i)
-					let blobData = Data(bytes: blobPointer!, count: Int(blobSize))
-					row[columnName] = blobData
-				case SQLITE_INTEGER:
-					let intValue = sqlite3_column_int64(statement, i)
-					row[columnName] = intValue
-				case SQLITE_FLOAT:
-					let doubleValue = sqlite3_column_double(statement, i)
-					row[columnName] = doubleValue
-				case SQLITE_NULL:
-					row[columnName] = nil
-				default:
-					throw SQLiteError.queryError("Unexpected column type in result set: \(columnType)")
+	/// Loops running `sqlite3_step` and extracting the row values.
+	func readRows(in statement: OpaquePointer) throws -> [[String: Any?]] {
+		var statementResults: [[String: Any?]] = []
+		while true {
+			let stepResult = sqlite3_step(statement)
+			if stepResult == SQLITE_ROW {
+				var row: [String: Any?] = [:]
+				let columnCount = sqlite3_column_count(statement)
+				for i in 0..<columnCount {
+					let columnName = String(cString: sqlite3_column_name(statement, i))
+					let columnType = sqlite3_column_type(statement, i)
+					switch columnType {
+					case SQLITE_TEXT:
+						let columnValue = String(cString: sqlite3_column_text(statement, i))
+						row[columnName] = columnValue
+					case SQLITE_BLOB:
+						let blobPointer = sqlite3_column_blob(statement, i)
+						let blobSize = sqlite3_column_bytes(statement, i)
+						let blobData = Data(bytes: blobPointer!, count: Int(blobSize))
+						row[columnName] = blobData
+					case SQLITE_INTEGER:
+						let intValue = sqlite3_column_int64(statement, i)
+						row[columnName] = intValue
+					case SQLITE_FLOAT:
+						let doubleValue = sqlite3_column_double(statement, i)
+						row[columnName] = doubleValue
+					case SQLITE_NULL:
+						row[columnName] = nil
+					default:
+						throw SQLiteError.queryError("Unexpected column type in result set: \(columnType)")
+					}
 				}
+				statementResults.append(row)
+			} else if stepResult == SQLITE_DONE {
+				break
+			} else {
+				let errmsg = String(cString: sqlite3_errmsg(sqlite3_db_handle(statement)))
+				throw SQLiteError.queryError("sqlite3_step failed: \(errmsg)")
 			}
-			statementResults.append(row)
-		} else if stepResult == SQLITE_DONE {
-			break
-		} else {
-			let errmsg = String(cString: sqlite3_errmsg(sqlite3_db_handle(statement)))
-			throw SQLiteError.queryError("sqlite3_step failed: \(errmsg)")
 		}
+		return statementResults
 	}
-	return statementResults
 }
