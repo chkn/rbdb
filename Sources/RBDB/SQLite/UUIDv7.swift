@@ -1,5 +1,8 @@
 import Foundation
 import SQLite3
+#if canImport(Security)
+import Security
+#endif
 
 struct UUIDv7: Equatable {
 	public let data: (UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8,UInt8)
@@ -9,15 +12,22 @@ struct UUIDv7: Equatable {
 		let timestamp = UInt64(Date().timeIntervalSince1970 * 1000)
 
 		// Generate random bytes for the rest of the UUID
-		var randomBytes = Data(count: 10)
+		var randomBytes: Data
+
+		#if canImport(Security)
+		randomBytes = Data(count: 10)
 		let result = randomBytes.withUnsafeMutableBytes { bytes in
 			SecRandomCopyBytes(kSecRandomDefault, 10, bytes.bindMemory(to: UInt8.self).baseAddress!)
 		}
 
 		if result != errSecSuccess {
-			// Fallback to arc4random if SecRandom fails
+			// Fallback to Swift's random if SecRandom fails
 			randomBytes = Data((0..<10).map { _ in UInt8.random(in: 0...255) })
 		}
+		#else
+		// On non-Apple platforms, use Swift's built-in random number generator
+		randomBytes = Data((0..<10).map { _ in UInt8.random(in: 0...255) })
+		#endif
 
 		// Build UUID v7 according to RFC 4122
 

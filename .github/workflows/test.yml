@@ -8,10 +8,12 @@ on:
 
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Run tests
-      run: swift test
+    - name: Build and run tests in Docker
+      run: |
+        docker build -t rbdb-test .
+        docker run --rm rbdb-test

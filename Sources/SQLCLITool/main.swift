@@ -1,6 +1,16 @@
+#if os(macOS) || os(iOS)
+import Darwin
+typealias TerminalFlag = UInt
+#elseif canImport(Glibc)
+// https://github.com/swiftlang/swift/issues/77866
+@preconcurrency import Glibc
+typealias TerminalFlag = UInt32
+#else
+#error("Unknown platform")
+#endif
+
 import Foundation
 import RBDB
-import Darwin
 
 let productName = "RBDB Interactive SQL Console"
 
@@ -55,7 +65,7 @@ func displaySchema(database: SQLiteDatabase) {
 
 func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool {
     do {
-        let content = try String(contentsOfFile: filePath)
+        let content = try String(contentsOfFile: filePath, encoding: .utf8)
 
         print("Executing commands from file: \(filePath)")
 
@@ -136,14 +146,14 @@ func stringValue(_ value: Any?) -> String {
 func setupRawMode() {
     var raw = termios()
     tcgetattr(STDIN_FILENO, &raw)
-    raw.c_lflag &= ~(UInt(ECHO | ICANON))
+    raw.c_lflag &= ~(TerminalFlag(ECHO | ICANON))
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
 }
 
 func restoreTerminal() {
     var cooked = termios()
     tcgetattr(STDIN_FILENO, &cooked)
-    cooked.c_lflag |= UInt(ECHO | ICANON)
+    cooked.c_lflag |= TerminalFlag(ECHO | ICANON)
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &cooked)
 }
 
