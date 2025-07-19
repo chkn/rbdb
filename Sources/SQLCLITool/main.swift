@@ -134,6 +134,10 @@ func stringValue(_ value: Any?) -> String {
         if value is NSNull {
             return "NULL"
         } else if let data = value as? Data {
+            // Try to interpret as UUIDv7 first
+            if let uuid = UUIDv7(data: data) {
+                return uuid.description
+            }
             return "<BLOB \(data.count) bytes>"
         } else {
             return String(describing: value)
