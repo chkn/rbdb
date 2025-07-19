@@ -64,22 +64,27 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	func handleCreateTable(name: String, columnsDef: String, ifNotExists: Bool) throws {
-		// Parse column definitions to extract column names
 		let columnNames = try parseColumnNames(from: columnsDef)
-
-		// Convert column names to JSON text
 		let columnNamesJson = try String(data: JSONSerialization.data(withJSONObject: columnNames), encoding: .utf8)!
 
-		// First create an entity record
-		try super.query("INSERT INTO entity DEFAULT VALUES")
+		try super.query("BEGIN TRANSACTION")
+		do {
+			// First create an entity record
+			try super.query("INSERT INTO entity DEFAULT VALUES")
 
-		// Insert into predicate table using the last inserted entity ID and jsonb function
-		// Use INSERT OR IGNORE if IF NOT EXISTS was specified
-		let orIgnore = ifNotExists ? "OR IGNORE " : ""
-		try super.query("""
-			INSERT \(orIgnore)INTO predicate (internal_entity_id, name, column_names)
-			VALUES (last_insert_rowid(), ?, jsonb(?))
-		""", parameters: [name, columnNamesJson])
+			// Insert into predicate table using the last inserted entity ID and jsonb function
+			// Use INSERT OR IGNORE if IF NOT EXISTS was specified
+			let orIgnore = ifNotExists ? "OR IGNORE " : ""
+			try super.query("""
+				INSERT \(orIgnore)INTO predicate (internal_entity_id, name, column_names)
+				VALUES (last_insert_rowid(), ?, jsonb(?))
+			""", parameters: [name, columnNamesJson])
+
+			try super.query("COMMIT")
+		} catch {
+			try super.query("ROLLBACK")
+			throw error
+		}
 	}
 
 	private func parseColumnNames(from columnsDef: String) throws -> [String] {

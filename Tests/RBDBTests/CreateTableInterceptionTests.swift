@@ -203,4 +203,27 @@ struct CreateTableInterceptionTests {
             try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
         }
     }
+
+    @Test("Failed CREATE TABLE doesn't leave orphaned entity records")
+    func failedCreateTableDoesntLeaveOrphanedEntities() async throws {
+        let rbdb = try RBDB(path: ":memory:")
+
+        // First create the table
+        try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+
+        // Count entities before failed attempt
+        let entitiesBeforeResults = try rbdb.query("SELECT COUNT(*) as count FROM entity")
+        let entitiesBefore = entitiesBeforeResults[0]["count"] as! Int64
+
+        // Try to create the same table again without IF NOT EXISTS - should throw
+        #expect(throws: SQLiteError.self) {
+            try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+        }
+
+        // Count entities after failed attempt - should be the same
+        let entitiesAfterResults = try rbdb.query("SELECT COUNT(*) as count FROM entity")
+        let entitiesAfter = entitiesAfterResults[0]["count"] as! Int64
+
+        #expect(entitiesBefore == entitiesAfter, "Failed CREATE TABLE should not leave orphaned entity records")
+    }
 }
