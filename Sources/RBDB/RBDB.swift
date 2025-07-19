@@ -84,14 +84,14 @@ public class RBDB: SQLiteDatabase {
 		try super.query("BEGIN TRANSACTION")
 		do {
 			// First create an entity record
-			try super.query("INSERT INTO entity DEFAULT VALUES")
+			try super.query("INSERT INTO _entity DEFAULT VALUES")
 
 			// Insert into predicate table using the last inserted entity ID and jsonb function
 			// Use INSERT OR IGNORE if IF NOT EXISTS was specified
 			let orIgnore = createTable.ifNotExists ? "OR IGNORE " : ""
 			try super.query(
 				"""
-					INSERT \(orIgnore)INTO predicate (internal_entity_id, name, column_names)
+					INSERT \(orIgnore)INTO _predicate (internal_entity_id, name, column_names)
 					VALUES (last_insert_rowid(), ?, jsonb(?))
 				""",
 				parameters: [createTable.tableName, columnNamesJson]
