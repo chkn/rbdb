@@ -13,7 +13,9 @@ public class RBDB: SQLiteDatabase {
 		defer { isInitializing = false }
 
 		// Migrate the schema
-		try super.query(String(decoding: PackageResources.schema_sql, as: UTF8.self))
+		try super.query(
+			String(decoding: PackageResources.schema_sql, as: UTF8.self)
+		)
 	}
 
 	@discardableResult
@@ -30,7 +32,9 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	@discardableResult
-	public override func query(_ sql: String, parameters: [Any?]) throws -> [[String: Any?]] {
+	public override func query(_ sql: String, parameters: [Any?]) throws
+		-> [[String: Any?]]
+	{
 		do {
 			return try super.query(sql, parameters: parameters)
 		} catch let error as SQLiteError {
@@ -42,20 +46,17 @@ public class RBDB: SQLiteDatabase {
 		}
 	}
 
-	override func readRows(in statement: OpaquePointer) throws -> [[String: Any?]] {
-		// Only intercept commands during normal operation, not during initialization
+	override func readRows(in statement: OpaquePointer) throws -> [[String:
+		Any?]]
+	{
 		if !isInitializing {
 			if let normalizedSQL = sqlite3_normalized_sql(statement) {
 				let sqlString = String(cString: normalizedSQL)
 				if sqlString.hasPrefix("CREATE TABLE") {
-					// Find the table name and column definitions manually
-					guard let tableInfo = extractTableNameAndColumns(from: sqlString) else {
-						throw SQLiteError.queryError("Cannot parse CREATE TABLE statement: \(sqlString)")
-					}
+					try interceptCreateTable(sqlString)
 
-					try handleCreateTable(name: tableInfo.tableName, columnsDef: tableInfo.columnsDef, ifNotExists: tableInfo.ifNotExists)
-
-					// Return empty result set instead of executing the CREATE TABLE
+					// Return empty result set instead of letting SQLite execute
+					//  the CREATE TABLE
 					return []
 				}
 			}
@@ -63,9 +64,22 @@ public class RBDB: SQLiteDatabase {
 		return try super.readRows(in: statement)
 	}
 
-	func handleCreateTable(name: String, columnsDef: String, ifNotExists: Bool) throws {
-		let columnNames = try parseColumnNames(from: columnsDef)
-		let columnNamesJson = try String(data: JSONSerialization.data(withJSONObject: columnNames), encoding: .utf8)!
+	func interceptCreateTable(_ sql: String) throws {
+		guard
+			let createTable = try ParsedCreateTable(
+				sql: sql
+			)
+		else {
+			throw SQLiteError.queryError(
+				"Cannot parse CREATE TABLE statement: \(sql)"
+			)
+		}
+		let columnNamesJson = try String(
+			data: JSONSerialization.data(
+				withJSONObject: createTable.columnNames
+			),
+			encoding: .utf8
+		)!
 
 		try super.query("BEGIN TRANSACTION")
 		do {
@@ -74,11 +88,14 @@ public class RBDB: SQLiteDatabase {
 
 			// Insert into predicate table using the last inserted entity ID and jsonb function
 			// Use INSERT OR IGNORE if IF NOT EXISTS was specified
-			let orIgnore = ifNotExists ? "OR IGNORE " : ""
-			try super.query("""
-				INSERT \(orIgnore)INTO predicate (internal_entity_id, name, column_names)
-				VALUES (last_insert_rowid(), ?, jsonb(?))
-			""", parameters: [name, columnNamesJson])
+			let orIgnore = createTable.ifNotExists ? "OR IGNORE " : ""
+			try super.query(
+				"""
+					INSERT \(orIgnore)INTO predicate (internal_entity_id, name, column_names)
+					VALUES (last_insert_rowid(), ?, jsonb(?))
+				""",
+				parameters: [createTable.tableName, columnNamesJson]
+			)
 
 			try super.query("COMMIT")
 		} catch {
@@ -87,115 +104,12 @@ public class RBDB: SQLiteDatabase {
 		}
 	}
 
-	private func parseColumnNames(from columnsDef: String) throws -> [String] {
-		var columnNames: [String] = []
-
-		// Split by comma, but be careful about commas inside parentheses (for types like DECIMAL(10,2))
-		var parenDepth = 0
-		var currentColumn = ""
-
-		for char in columnsDef {
-			switch char {
-			case "(":
-				parenDepth += 1
-				currentColumn.append(char)
-			case ")":
-				parenDepth -= 1
-				currentColumn.append(char)
-			case ",":
-				if parenDepth == 0 {
-					// Process the current column
-					try processColumn(currentColumn, into: &columnNames)
-					currentColumn = ""
-				} else {
-					currentColumn.append(char)
-				}
-			default:
-				currentColumn.append(char)
-			}
-		}
-
-		// Handle the last column
-		if !currentColumn.isEmpty {
-			try processColumn(currentColumn, into: &columnNames)
-		}
-
-		return columnNames
-	}
-
-	private func processColumn(_ columnDef: String, into columnNames: inout [String]) throws {
-		let trimmed = columnDef.trimmingCharacters(in: .whitespacesAndNewlines)
-
-		// Skip table constraints like UNIQUE(name), FOREIGN KEY, etc.
-		let upperTrimmed = trimmed.uppercased()
-		if upperTrimmed.hasPrefix("UNIQUE(") ||
-		   upperTrimmed.hasPrefix("PRIMARY KEY") ||
-		   upperTrimmed.hasPrefix("FOREIGN KEY") ||
-		   upperTrimmed.hasPrefix("CHECK(") ||
-		   upperTrimmed.hasPrefix("CONSTRAINT") {
-			return
-		}
-
-		// Extract column name (first word before space or type)
-		if let columnName = trimmed.components(separatedBy: .whitespacesAndNewlines).first {
-			// Check for quoted column names and reject them
-			if columnName.hasPrefix("\"") || columnName.hasPrefix("'") ||
-			   columnName.hasPrefix("`") || columnName.hasPrefix("[") {
-				throw SQLiteError.queryError("Quoted column names are not supported: \(columnName)")
-			}
-
-			if !columnName.isEmpty {
-				columnNames.append(columnName)
-			}
-		}
-	}
-
-	private func extractTableNameAndColumns(from sql: String) -> (tableName: String, columnsDef: String, ifNotExists: Bool)? {
-		// Handle CREATE TABLE [IF NOT EXISTS] tableName (columns...)
-		let pattern = #/^CREATE\s+TABLE(\s+IF\s+NOT\s+EXISTS)?\s*([^(]+?)\(/#
-		guard let match = sql.firstMatch(of: pattern) else {
-			return nil
-		}
-
-		// Check if IF NOT EXISTS was captured
-		let ifNotExists = match.1 != nil
-
-		let rawTableName = String(match.2).trimmingCharacters(in: .whitespacesAndNewlines)
-		let tableName = rawTableName.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`[]"))
-
-		// Find the opening parenthesis after the table name
-		guard let openParenIndex = sql.firstIndex(of: "(") else { return nil }
-
-		// Find the matching closing parenthesis, handling nested parentheses
-		var parenDepth = 0
-		var currentIndex = openParenIndex
-		var closingParenIndex: String.Index?
-
-		for char in sql[openParenIndex...] {
-			if char == "(" {
-				parenDepth += 1
-			} else if char == ")" {
-				parenDepth -= 1
-				if parenDepth == 0 {
-					closingParenIndex = currentIndex
-					break
-				}
-			}
-			currentIndex = sql.index(after: currentIndex)
-		}
-
-		guard let closeParenIndex = closingParenIndex else { return nil }
-
-		// Extract the column definitions between the parentheses
-		let startIndex = sql.index(after: openParenIndex)
-		let columnsDef = String(sql[startIndex..<closeParenIndex])
-
-		return (tableName: tableName, columnsDef: columnsDef, ifNotExists: ifNotExists)
-	}
-
 	private func rescue(error: SQLiteError) throws -> Bool {
-		if case let .queryError(msg) = error, let match = msg.firstMatch(of: /no such table: ([^\s]+)/) {
-			let createViewSQL = "CREATE TEMP VIEW IF NOT EXISTS \(match.1) AS SELECT 1 AS stub;"
+		if case .queryError(let msg) = error,
+			let match = msg.firstMatch(of: /no such table: ([^\s]+)/)
+		{
+			let createViewSQL =
+				"CREATE TEMP VIEW IF NOT EXISTS \(match.1) AS SELECT 1 AS stub;"
 			try super.query(createViewSQL)
 			return true
 		}
