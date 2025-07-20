@@ -117,15 +117,17 @@ public class SQLiteDatabase {
 				let paramIndex = Int32(index + 1)  // SQLite parameters are 1-indexed
 
 				switch parameter {
-				case let stringValue as String:
+				case let stringValue as any StringProtocol:
 					guard
-						sqlite3_bind_text(
-							statement,
-							paramIndex,
-							stringValue,
-							-1,
-							unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-						) == SQLITE_OK
+						stringValue.withCString({ bindCStr in
+							sqlite3_bind_text(
+								statement,
+								paramIndex,
+								bindCStr,
+								-1,
+								unsafeBitCast(-1, to: sqlite3_destructor_type.self) // SQLITE_TRANSIENT
+							)
+						}) == SQLITE_OK
 					else {
 						let errmsg = String(cString: sqlite3_errmsg(db))
 						throw SQLiteError.queryError(
@@ -172,7 +174,7 @@ public class SQLiteDatabase {
 							paramIndex,
 							bytes.baseAddress,
 							Int32(dataValue.count),
-							unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+							unsafeBitCast(-1, to: sqlite3_destructor_type.self) // SQLITE_TRANSIENT
 						)
 					}
 					guard result == SQLITE_OK else {
@@ -270,3 +272,4 @@ public class SQLiteDatabase {
 		return statementResults
 	}
 }
+
