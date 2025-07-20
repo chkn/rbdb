@@ -1,4 +1,4 @@
-public protocol Symbol: Comparable, Codable {
+public protocol Symbol: Comparable, Codable, LosslessStringConvertible {
 	var type: SymbolType { get }
 	func accept<V: SymbolVisitor>(visitor: V) -> Self
 }

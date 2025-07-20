@@ -56,34 +56,9 @@ struct ParsedCreateTable {
 private func parseColumnNames(from columnsDef: String) throws -> [String] {
 	var columnNames: [String] = []
 
-	// Split by comma, but be careful about commas inside parentheses (for types like DECIMAL(10,2))
-	var parenDepth = 0
-	var currentColumn = ""
-
-	for char in columnsDef {
-		switch char {
-		case "(":
-			parenDepth += 1
-			currentColumn.append(char)
-		case ")":
-			parenDepth -= 1
-			currentColumn.append(char)
-		case ",":
-			if parenDepth == 0 {
-				// Process the current column
-				try processColumn(currentColumn, into: &columnNames)
-				currentColumn = ""
-			} else {
-				currentColumn.append(char)
-			}
-		default:
-			currentColumn.append(char)
-		}
-	}
-
-	// Handle the last column
-	if !currentColumn.isEmpty {
-		try processColumn(currentColumn, into: &columnNames)
+	let columnDefs = StringParsing.split(columnsDef, by: ",")
+	for columnDef in columnDefs {
+		try processColumn(columnDef, into: &columnNames)
 	}
 
 	return columnNames

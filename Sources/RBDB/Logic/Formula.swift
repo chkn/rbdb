@@ -1,7 +1,21 @@
-
-public enum Quantifier: Comparable, Codable {
+public enum Quantifier: Comparable, Codable, LosslessStringConvertible {
 	case forAll
 	case thereExists
+
+	public var description: String {
+		switch self {
+		case .forAll: "∀"
+		case .thereExists: "∃"
+		}
+	}
+
+	public init?(_ description: String) {
+		switch description.lowercased() {
+		case "∀", "forall": self = .forAll
+		case "∃", "exists": self = .thereExists
+		default: return nil
+		}
+	}
 
 	public init(from decoder: Decoder) throws {
 		let container = try decoder.singleValueContainer()
@@ -10,7 +24,10 @@ public enum Quantifier: Comparable, Codable {
 		case 0: self = .forAll
 		case 1: self = .thereExists
 		default:
-			throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid Quantifier raw value: \(value)")
+			throw DecodingError.dataCorruptedError(
+				in: container,
+				debugDescription: "Invalid Quantifier raw value: \(value)"
+			)
 		}
 	}
 
@@ -25,7 +42,11 @@ public enum Quantifier: Comparable, Codable {
 
 public enum Formula: Symbol {
 	case predicate(name: String, arguments: [Term])
-	indirect case quantified(_ quantifier: Quantifier, _ variable: Var, _ body: Formula)
+	indirect case quantified(
+		_ quantifier: Quantifier,
+		_ variable: Var,
+		_ body: Formula
+	)
 
 	public var type: SymbolType {
 		switch self {
@@ -34,7 +55,65 @@ public enum Formula: Symbol {
 		}
 	}
 
-	public func accept<V>(visitor: V) -> Formula where V : SymbolVisitor {
+	public var description: String {
+		switch self {
+		case .predicate(let name, arguments: let args):
+			"\(name)(\(args.map({ String(describing: $0) }).joined(separator: ", ")))"
+		case .quantified(let quantifier, let v, let body):
+			"\(quantifier)\(v) \(body)"
+		}
+	}
+
+	public init?(_ description: String) {
+		var trimmed = description.trimmingCharacters(
+			in: .whitespacesAndNewlines
+		)
+		if trimmed.hasPrefix("(") && trimmed.hasSuffix(")") {
+			trimmed = String(trimmed.dropFirst().dropLast())
+		}
+
+		// Try quantified formula: "∀a P(a)" or "∃a P(a)"
+		if let match = trimmed.wholeMatch(
+			of: /^([∀∃]|forall |exists )([a-z])\.?\s*(.+)$/
+		) {
+			guard
+				let quantifier = Quantifier(
+					String(match.1.trimmingCharacters(in: .whitespaces))
+				),
+				let char = match.2.first,
+				let body = Formula(String(match.3))
+			else { return nil }
+
+			let id = UInt8(char.asciiValue! - 97)
+			let variable = Var(id: id)
+			self = .quantified(quantifier, variable, body)
+			return
+		}
+
+		// Try predicate: "Name(args...)"
+		if let match = trimmed.wholeMatch(of: /^(\w+)\(([^)]*)\)$/) {
+			let name = String(match.1)
+			let argsString = String(match.2).trimmingCharacters(
+				in: .whitespacesAndNewlines
+			)
+
+			var arguments: [Term] = []
+			if !argsString.isEmpty {
+				let argStrings = StringParsing.split(argsString, by: ",")
+				for argString in argStrings {
+					guard let term = Term(argString) else { return nil }
+					arguments.append(term)
+				}
+			}
+
+			self = .predicate(name: name, arguments: arguments)
+			return
+		}
+
+		return nil
+	}
+
+	public func accept<V>(visitor: V) -> Formula where V: SymbolVisitor {
 		visitor.visit(formula: self)
 	}
 }
@@ -42,7 +121,7 @@ public enum Formula: Symbol {
 extension SymbolVisitor {
 	public func visit(formula: Formula) -> Formula {
 		switch formula {
-		case .predicate(name: let name, arguments: let args):
+		case .predicate(let name, arguments: let args):
 			.predicate(name: name, arguments: args.map(self.visit(term:)))
 		case .quantified(let q, let v, let body):
 			.quantified(q, self.visit(variable: v), self.visit(formula: body))
@@ -63,9 +142,18 @@ extension Formula: Codable {
 			}
 			self = .predicate(name: name, arguments: args)
 		case .quantified:
-			self = .quantified(try arr.decode(Quantifier.self), Var(id: try arr.decode(UInt8.self)), try arr.decode(Formula.self))
+			self = .quantified(
+				try arr.decode(Quantifier.self),
+				Var(id: try arr.decode(UInt8.self)),
+				try arr.decode(Formula.self)
+			)
 		default:
-			throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "No valid formula symbol type key found"))
+			throw DecodingError.dataCorrupted(
+				DecodingError.Context(
+					codingPath: decoder.codingPath,
+					debugDescription: "No valid formula symbol type key found"
+				)
+			)
 		}
 	}
 
