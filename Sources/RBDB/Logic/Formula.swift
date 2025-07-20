@@ -33,6 +33,21 @@ public enum Formula: Symbol {
 		case .quantified(_, _, let body): .quantified(body.type)
 		}
 	}
+
+	public func accept<V>(visitor: V) -> Formula where V : SymbolVisitor {
+		visitor.visit(formula: self)
+	}
+}
+
+extension SymbolVisitor {
+	public func visit(formula: Formula) -> Formula {
+		switch formula {
+		case .predicate(name: let name, arguments: let args):
+			.predicate(name: name, arguments: args.map(self.visit(term:)))
+		case .quantified(let q, let v, let body):
+			.quantified(q, self.visit(variable: v), self.visit(formula: body))
+		}
+	}
 }
 
 extension Formula: Codable {

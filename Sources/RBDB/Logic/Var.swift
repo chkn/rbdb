@@ -1,6 +1,5 @@
 public class Var {
-	// Set once the enclosing formula is canonicalized
-	var id: UInt8? = nil
+	let id: UInt8?
 
 	public init(id: UInt8? = nil) {
 		self.id = id

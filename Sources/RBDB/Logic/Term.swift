@@ -13,6 +13,20 @@ public enum Term: Symbol {
 		case .boolean, .number, .string: .constant
 		}
 	}
+
+	public func accept<V>(visitor: V) -> Term where V : SymbolVisitor {
+		visitor.visit(term: self)
+	}
+}
+
+extension SymbolVisitor {
+	public func visit(term: Term) -> Term {
+		switch term {
+		case .variable(let v): .variable(self.visit(variable: v))
+		default: term
+		}
+	}
+	public func visit(variable: Var) -> Var { variable }
 }
 
 extension Term: Codable {
