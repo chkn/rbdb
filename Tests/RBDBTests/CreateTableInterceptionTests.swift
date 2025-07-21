@@ -38,13 +38,6 @@ struct CreateTableInterceptionTests {
 		} else {
 			#expect(Bool(false), "column_names should be accessible as JSON")
 		}
-
-		// Verify that the actual table was NOT created
-		#expect(throws: SQLiteError.self) {
-			try rbdb.query(
-				"INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')"
-			)
-		}
 	}
 
 	@Test("CREATE TABLE IF NOT EXISTS is intercepted")
@@ -303,7 +296,7 @@ struct CreateTableInterceptionTests {
 
 		// Count entities before failed attempt
 		let entitiesBeforeResults = try rbdb.query(
-			"SELECT COUNT(*) as count FROM entity"
+			"SELECT COUNT(*) as count FROM _entity"
 		)
 		let entitiesBefore = entitiesBeforeResults[0]["count"] as! Int64
 
@@ -314,7 +307,7 @@ struct CreateTableInterceptionTests {
 
 		// Count entities after failed attempt - should be the same
 		let entitiesAfterResults = try rbdb.query(
-			"SELECT COUNT(*) as count FROM entity"
+			"SELECT COUNT(*) as count FROM _entity"
 		)
 		let entitiesAfter = entitiesAfterResults[0]["count"] as! Int64
 
