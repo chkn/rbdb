@@ -101,3 +101,63 @@ import Testing
 		#expect(parsed == formula, "Failed round-trip for formula: \(formula)")
 	}
 }
+
+@Test func formulasWithDifferentVariableNamesCanonicalizeEqually() async throws
+{
+	// Test that formulas with the same structure but different variable names
+	// become equal after parsing and canonicalization
+
+	// These represent the same logical formula but with different variable names
+	let formula1String = "∀a P(a)"
+	let formula2String = "∀b P(b)"
+	let formula3String = "∀z P(z)"
+
+	// Parse the formulas
+	guard let parsed1 = Formula(formula1String),
+		let parsed2 = Formula(formula2String),
+		let parsed3 = Formula(formula3String)
+	else {
+		#expect(Bool(false), "Failed to parse formulas")
+		return
+	}
+
+	// Before canonicalization, they should NOT be equal (different variable instances)
+	#expect(parsed1 != parsed2)
+	#expect(parsed2 != parsed3)
+	#expect(parsed1 != parsed3)
+
+	// After canonicalization, they should be equal (same logical structure)
+	let canonical1 = parsed1.canonicalize()
+	let canonical2 = parsed2.canonicalize()
+	let canonical3 = parsed3.canonicalize()
+
+	#expect(canonical1 == canonical2)
+	#expect(canonical2 == canonical3)
+	#expect(canonical1 == canonical3)
+
+	// Test more complex formulas
+	let complex1String = "∀x ∃y P(x, y)"
+	let complex2String = "∀a ∃b P(a, b)"
+	let complex3String = "∀m ∃n P(m, n)"
+
+	guard let complexParsed1 = Formula(complex1String),
+		let complexParsed2 = Formula(complex2String),
+		let complexParsed3 = Formula(complex3String)
+	else {
+		#expect(Bool(false), "Failed to parse complex formulas")
+		return
+	}
+
+	// Before canonicalization, they should NOT be equal
+	#expect(complexParsed1 != complexParsed2)
+	#expect(complexParsed2 != complexParsed3)
+
+	// After canonicalization, they should be equal
+	let complexCanonical1 = complexParsed1.canonicalize()
+	let complexCanonical2 = complexParsed2.canonicalize()
+	let complexCanonical3 = complexParsed3.canonicalize()
+
+	#expect(complexCanonical1 == complexCanonical2)
+	#expect(complexCanonical2 == complexCanonical3)
+	#expect(complexCanonical1 == complexCanonical3)
+}

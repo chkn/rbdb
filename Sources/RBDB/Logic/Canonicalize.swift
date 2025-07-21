@@ -1,14 +1,15 @@
-
 class CanonicalizeVisitor: SymbolVisitor {
-	private var counter: UInt8 = 0
+	private var varMapping: [ObjectIdentifier: Var] = [:]
 
 	func visit(variable: Var) -> Var {
-		if variable.id == nil {
-			let newVar = Var(id: counter)
-			counter += 1
-			return newVar
+		let varId = ObjectIdentifier(variable)
+
+		if let existingVar = varMapping[varId] {
+			return existingVar
 		} else {
-			return variable
+			let newVar = Var(id: UInt8(varMapping.count))
+			varMapping[varId] = newVar
+			return newVar
 		}
 	}
 }
