@@ -1,400 +1,479 @@
-#if os(macOS) || os(iOS)
-import Darwin
-typealias TerminalFlag = UInt
-#elseif canImport(Glibc)
-// https://github.com/swiftlang/swift/issues/77866
-@preconcurrency import Glibc
-typealias TerminalFlag = UInt32
-#else
-#error("Unknown platform")
-#endif
-
 import Foundation
 import RBDB
+
+#if os(macOS) || os(iOS)
+	import Darwin
+	typealias TerminalFlag = UInt
+#elseif canImport(Glibc)
+	// https://github.com/swiftlang/swift/issues/77866
+	@preconcurrency import Glibc
+	typealias TerminalFlag = UInt32
+#else
+	#error("Unknown platform")
+#endif
 
 let productName = "RBDB Interactive SQL Console"
 
 func printUsage() {
-    print("Usage: sql [options] [database_path]")
-    print("  \(productName)")
-    print("")
-    print("Arguments:")
-    print("  database_path        Path to database file (optional)")
-    print("                       If not provided, uses in-memory database")
-    print("")
-    print("Options:")
-    print("  --help               Show this help message")
-    print("  -f | --file <path>   Execute the SQL commands from the given file")
-    print("")
-    print("Commands:")
-    print("  .exit                Exit the console")
-    print("  .schema              Show database schema")
+	print("Usage: sql [options] [database_path]")
+	print("  \(productName)")
+	print("")
+	print("Arguments:")
+	print("  database_path        Path to database file (optional)")
+	print("                       If not provided, uses in-memory database")
+	print("")
+	print("Options:")
+	print("  --help               Show this help message")
+	print("  -f | --file <path>   Execute the SQL commands from the given file")
+	print("")
+	print("Commands:")
+	print("  .exit                Exit the console")
+	print("  .schema              Show database schema")
 }
 
 func displaySchema(database: SQLiteDatabase) {
-    do {
-        let results = try database.query("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name")
+	do {
+		let results = try database.query(
+			"SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name"
+		)
 
-        if results.isEmpty {
-            print("No schema objects found.")
-            return
-        }
+		if results.isEmpty {
+			print("No schema objects found.")
+			return
+		}
 
-        var currentType = ""
-        for row in results {
-            let type = row["type"] as? String ?? ""
-            let name = row["name"] as? String ?? ""
-            let sql = row["sql"] as? String ?? ""
+		var currentType = ""
+		for row in results {
+			let type = row["type"] as? String ?? ""
+			let name = row["name"] as? String ?? ""
+			let sql = row["sql"] as? String ?? ""
 
-            if type != currentType {
-                currentType = type
-                print("\n-- \(type.uppercased())S")
-                print(String(repeating: "-", count: 50))
-            }
+			if type != currentType {
+				currentType = type
+				print("\n-- \(type.uppercased())S")
+				print(String(repeating: "-", count: 50))
+			}
 
-            print("\(name):")
-            if !sql.isEmpty {
-                print("  \(sql)")
-            }
-            print()
-        }
-    } catch {
-        print("Error displaying schema: \(error)")
-    }
+			print("\(name):")
+			if !sql.isEmpty {
+				print("  \(sql)")
+			}
+			print()
+		}
+	} catch {
+		print("Error displaying schema: \(error)")
+	}
 }
 
-func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool {
-    do {
-        let content = try String(contentsOfFile: filePath, encoding: .utf8)
+func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
+{
+	do {
+		let content = try String(contentsOfFile: filePath, encoding: .utf8)
 
-        print("Executing commands from file: \(filePath)")
+		print("Executing commands from file: \(filePath)")
 
-        do {
-            let results = try database.query(content)
-            if !results.isEmpty {
-                print(formatTable(results))
-            } else {
-                print("Commands executed successfully.")
-            }
-        } catch {
-            print("Error executing commands: \(error)")
-            return false // Stop execution on error
-        }
+		do {
+			let results = try database.query(content)
+			if !results.isEmpty {
+				print(formatTable(results))
+			} else {
+				print("Commands executed successfully.")
+			}
+		} catch {
+			print("Error executing commands: \(error)")
+			return false  // Stop execution on error
+		}
 
-        print("File execution completed.")
-        return true // Continue to interactive mode
-    } catch {
-        print("Error reading file '\(filePath)': \(error)")
-        exit(1)
-    }
+		print("File execution completed.")
+		return true  // Continue to interactive mode
+	} catch {
+		print("Error reading file '\(filePath)': \(error)")
+		exit(1)
+	}
 }
 
 func formatTable(_ rows: [[String: Any?]]) -> String {
-    guard !rows.isEmpty else { return "No results." }
+	guard !rows.isEmpty else { return "No results." }
 
-    let columns = Array(rows[0].keys).sorted()
-    var output = ""
+	let columns = Array(rows[0].keys).sorted()
+	var output = ""
 
-    // Calculate column widths
-    var columnWidths: [String: Int] = [:]
-    for column in columns {
-        columnWidths[column] = column.count
-        for row in rows {
-            let valueStr = stringValue(row[column]?.flatMap({$0}))
-            columnWidths[column] = max(columnWidths[column] ?? 0, valueStr.count)
-        }
-    }
+	// Calculate column widths
+	var columnWidths: [String: Int] = [:]
+	for column in columns {
+		columnWidths[column] = column.count
+		for row in rows {
+			let valueStr = stringValue(row[column] ?? nil)
+			columnWidths[column] = max(
+				columnWidths[column] ?? 0,
+				valueStr.count
+			)
+		}
+	}
 
-    // Header
-    let headerLine = columns.map { column in
-        column.padding(toLength: columnWidths[column]!, withPad: " ", startingAt: 0)
-    }.joined(separator: " | ")
-    output += headerLine + "\n"
+	// Header
+	let headerLine = columns.map { column in
+		column.padding(
+			toLength: columnWidths[column]!,
+			withPad: " ",
+			startingAt: 0
+		)
+	}.joined(separator: " | ")
+	output += headerLine + "\n"
 
-    // Separator
-    let separatorLine = columns.map { column in
-        String(repeating: "-", count: columnWidths[column]!)
-    }.joined(separator: "-+-")
-    output += separatorLine + "\n"
+	// Separator
+	let separatorLine = columns.map { column in
+		String(repeating: "-", count: columnWidths[column]!)
+	}.joined(separator: "-+-")
+	output += separatorLine + "\n"
 
-    // Rows
-    for row in rows {
-        let rowLine = columns.map { column in
-			let valueStr = stringValue(row[column]?.flatMap({$0}))
-            return valueStr.padding(toLength: columnWidths[column]!, withPad: " ", startingAt: 0)
-        }.joined(separator: " | ")
-        output += rowLine + "\n"
-    }
+	// Rows
+	for row in rows {
+		let rowLine = columns.map { column in
+			let valueStr = stringValue(row[column] ?? nil)
+			return valueStr.padding(
+				toLength: columnWidths[column]!,
+				withPad: " ",
+				startingAt: 0
+			)
+		}.joined(separator: " | ")
+		output += rowLine + "\n"
+	}
 
-    return output
+	return output
 }
 
 func stringValue(_ value: Any?) -> String {
-    if let value = value {
-        if value is NSNull {
-            return "NULL"
-        } else if let data = value as? Data {
-            // Try to interpret as UUIDv7 first
-            if let uuid = UUIDv7(data: data) {
-                return uuid.description
-            }
-            return "<BLOB \(data.count) bytes>"
-        } else {
-            return String(describing: value)
-        }
-    } else {
-        return "NULL"
-    }
+	if let value = value {
+		if value is NSNull {
+			return "NULL"
+		} else if let data = value as? Data {
+			// Try to interpret as UUIDv7 first
+			if let uuid = UUIDv7(data: data) {
+				return uuid.description
+			}
+			return "<BLOB \(data.count) bytes>"
+		} else {
+			return String(describing: value)
+		}
+	} else {
+		return "NULL"
+	}
 }
 
 func setupRawMode() {
-    var raw = termios()
-    tcgetattr(STDIN_FILENO, &raw)
-    raw.c_lflag &= ~(TerminalFlag(ECHO | ICANON))
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+	var raw = termios()
+	tcgetattr(STDIN_FILENO, &raw)
+	raw.c_lflag &= ~(TerminalFlag(ECHO | ICANON))
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
 }
 
 func restoreTerminal() {
-    var cooked = termios()
-    tcgetattr(STDIN_FILENO, &cooked)
-    cooked.c_lflag |= TerminalFlag(ECHO | ICANON)
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &cooked)
+	var cooked = termios()
+	tcgetattr(STDIN_FILENO, &cooked)
+	cooked.c_lflag |= TerminalFlag(ECHO | ICANON)
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &cooked)
 }
 
 func redrawLineWithCursor(line: String, cursorPos: Int) {
-    // Clear the line and redraw with cursor positioning
-    print("\r\u{001B}[K", terminator: "")
-    print("sql> \(line)", terminator: "")
+	// Clear the line and redraw with cursor positioning
+	print("\r\u{001B}[K", terminator: "")
+	print("sql> \(line)", terminator: "")
 
-    // Move cursor to the correct position
-    if cursorPos < line.count {
-        let moveBack = line.count - cursorPos
-        print("\u{001B}[\(moveBack)D", terminator: "")
-    }
+	// Move cursor to the correct position
+	if cursorPos < line.count {
+		let moveBack = line.count - cursorPos
+		print("\u{001B}[\(moveBack)D", terminator: "")
+	}
 
-    fflush(stdout)
+	fflush(stdout)
 }
 
-func readLineWithHistory(history: inout [String], historyIndex: inout Int) -> String? {
-    var line = ""
-    var cursorPos = 0
+func readLineWithHistory(history: inout [String], historyIndex: inout Int)
+	-> String?
+{
+	var line = ""
+	var cursorPos = 0
 
-    while true {
-        let char = getchar()
+	while true {
+		let char = getchar()
 
-        if char == 27 { // ESC sequence
-            let next1 = getchar()
-            let next2 = getchar()
+		if char == 27 {  // ESC sequence
+			let next1 = getchar()
+			let next2 = getchar()
 
-            if next1 == 91 { // [ character
-                switch next2 {
-                case 65: // Up arrow
-                    if historyIndex > 0 {
-                        historyIndex -= 1
-                        // Clear current line
-                        print("\r\u{001B}[K", terminator: "")
-                        line = history[historyIndex]
-                        cursorPos = line.count
-                        print("sql> \(line)", terminator: "")
-                        fflush(stdout)
-                    }
-                case 66: // Down arrow
-                    if historyIndex < history.count - 1 {
-                        historyIndex += 1
-                        // Clear current line
-                        print("\r\u{001B}[K", terminator: "")
-                        line = history[historyIndex]
-                        cursorPos = line.count
-                        print("sql> \(line)", terminator: "")
-                        fflush(stdout)
-                    } else if historyIndex == history.count - 1 {
-                        historyIndex = history.count
-                        // Clear current line
-                        print("\r\u{001B}[K", terminator: "")
-                        line = ""
-                        cursorPos = 0
-                        print("sql> ", terminator: "")
-                        fflush(stdout)
-                    }
-                case 67: // Right arrow
-                    if cursorPos < line.count {
-                        cursorPos += 1
-                        redrawLineWithCursor(line: line, cursorPos: cursorPos)
-                    }
-                case 68: // Left arrow
-                    if cursorPos > 0 {
-                        cursorPos -= 1
-                        redrawLineWithCursor(line: line, cursorPos: cursorPos)
-                    }
-                case 51: // Delete key (ESC[3~)
-                    let next3 = getchar()
-                    if next3 == 126 { // ~ character
-                        if cursorPos < line.count {
-                            line.remove(at: line.index(line.startIndex, offsetBy: cursorPos))
-                            redrawLineWithCursor(line: line, cursorPos: cursorPos)
-                        }
-                    }
-                default:
-                    break
-                }
-            }
-        } else if char == 10 || char == 13 { // Enter
-            print()
-            return line
-        } else if char == 127 { // Backspace
-            if cursorPos > 0 {
-                line.remove(at: line.index(line.startIndex, offsetBy: cursorPos - 1))
-                cursorPos -= 1
-                redrawLineWithCursor(line: line, cursorPos: cursorPos)
-            }
-        } else if char >= 32 && char <= 126 { // Printable characters
-            let character = Character(UnicodeScalar(Int(char))!)
-            line.insert(character, at: line.index(line.startIndex, offsetBy: cursorPos))
-            cursorPos += 1
-            redrawLineWithCursor(line: line, cursorPos: cursorPos)
-        } else if char == 1 { // Ctrl+A (beginning of line)
-            cursorPos = 0
-            redrawLineWithCursor(line: line, cursorPos: cursorPos)
-        } else if char == 5 { // Ctrl+E (end of line)
-            cursorPos = line.count
-            redrawLineWithCursor(line: line, cursorPos: cursorPos)
-        } else if char == 4 { // Ctrl+D (EOF)
-            if line.isEmpty {
-                print()
-                return nil
-            }
-        }
-    }
+			if next1 == 91 {  // [ character
+				switch next2 {
+				case 65:  // Up arrow
+					if historyIndex > 0 {
+						historyIndex -= 1
+						// Clear current line
+						print("\r\u{001B}[K", terminator: "")
+						line = history[historyIndex]
+						cursorPos = line.count
+						print("sql> \(line)", terminator: "")
+						fflush(stdout)
+					}
+				case 66:  // Down arrow
+					if historyIndex < history.count - 1 {
+						historyIndex += 1
+						// Clear current line
+						print("\r\u{001B}[K", terminator: "")
+						line = history[historyIndex]
+						cursorPos = line.count
+						print("sql> \(line)", terminator: "")
+						fflush(stdout)
+					} else if historyIndex == history.count - 1 {
+						historyIndex = history.count
+						// Clear current line
+						print("\r\u{001B}[K", terminator: "")
+						line = ""
+						cursorPos = 0
+						print("sql> ", terminator: "")
+						fflush(stdout)
+					}
+				case 67:  // Right arrow
+					if cursorPos < line.count {
+						cursorPos += 1
+						redrawLineWithCursor(line: line, cursorPos: cursorPos)
+					}
+				case 68:  // Left arrow
+					if cursorPos > 0 {
+						cursorPos -= 1
+						redrawLineWithCursor(line: line, cursorPos: cursorPos)
+					}
+				case 51:  // Delete key (ESC[3~)
+					let next3 = getchar()
+					if next3 == 126 {  // ~ character
+						if cursorPos < line.count {
+							line.remove(
+								at: line.index(
+									line.startIndex,
+									offsetBy: cursorPos
+								)
+							)
+							redrawLineWithCursor(
+								line: line,
+								cursorPos: cursorPos
+							)
+						}
+					}
+				default:
+					break
+				}
+			}
+		} else if char == 10 || char == 13 {  // Enter
+			print()
+			return line
+		} else if char == 127 {  // Backspace
+			if cursorPos > 0 {
+				line.remove(
+					at: line.index(line.startIndex, offsetBy: cursorPos - 1)
+				)
+				cursorPos -= 1
+				redrawLineWithCursor(line: line, cursorPos: cursorPos)
+			}
+		} else if char >= 32 && char <= 126 {  // Printable characters
+			let character = Character(UnicodeScalar(Int(char))!)
+			line.insert(
+				character,
+				at: line.index(line.startIndex, offsetBy: cursorPos)
+			)
+			cursorPos += 1
+			redrawLineWithCursor(line: line, cursorPos: cursorPos)
+		} else if char == 1 {  // Ctrl+A (beginning of line)
+			cursorPos = 0
+			redrawLineWithCursor(line: line, cursorPos: cursorPos)
+		} else if char == 5 {  // Ctrl+E (end of line)
+			cursorPos = line.count
+			redrawLineWithCursor(line: line, cursorPos: cursorPos)
+		} else if char == 4 {  // Ctrl+D (EOF)
+			if line.isEmpty {
+				print()
+				return nil
+			}
+		}
+	}
 }
 
 func main() {
-    let args = CommandLine.arguments
+	let args = CommandLine.arguments
 
-    // Handle --help
-    if args.contains("--help") {
-        printUsage()
-        exit(0)
-    }
+	// Handle --help
+	if args.contains("--help") {
+		printUsage()
+		exit(0)
+	}
 
-    // Parse arguments
-    var dbPath: String = ":memory:"
-    var isInMemory: Bool = true
-    var sqlFile: String? = nil
+	// Parse arguments
+	var dbPath: String = ":memory:"
+	var isInMemory: Bool = true
+	var sqlFile: String? = nil
 
-    var i = 1
-    while i < args.count {
-        let arg = args[i]
+	var i = 1
+	while i < args.count {
+		let arg = args[i]
 
-        if arg == "--file" || arg == "-f" {
-            if i + 1 >= args.count {
-                print("Error: --file requires a file path")
-                printUsage()
-                exit(1)
-            }
-            sqlFile = args[i + 1]
-            i += 2
-        } else if arg.hasPrefix("--file=") {
-            sqlFile = String(arg.dropFirst(7))
-            i += 1
-        } else if !arg.hasPrefix("-") {
-            // This is the database path
-            dbPath = arg
-            isInMemory = false
-            i += 1
-        } else {
-            print("Error: Unknown option '\(arg)'")
-            printUsage()
-            exit(1)
-        }
-    }
+		if arg == "--file" || arg == "-f" {
+			if i + 1 >= args.count {
+				print("Error: --file requires a file path")
+				printUsage()
+				exit(1)
+			}
+			sqlFile = args[i + 1]
+			i += 2
+		} else if arg.hasPrefix("--file=") {
+			sqlFile = String(arg.dropFirst(7))
+			i += 1
+		} else if !arg.hasPrefix("-") {
+			// This is the database path
+			dbPath = arg
+			isInMemory = false
+			i += 1
+		} else {
+			print("Error: Unknown option '\(arg)'")
+			printUsage()
+			exit(1)
+		}
+	}
 
-    // Initialize database
-    let database: RBDB
-    do {
-        database = try RBDB(path: dbPath)
-    } catch {
-        print("Error opening database: \(error)")
-        exit(1)
-    }
+	// Initialize database
+	let database: RBDB
+	do {
+		database = try RBDB(path: dbPath)
+	} catch {
+		print("Error opening database: \(error)")
+		exit(1)
+	}
 
-    print(productName)
-    if isInMemory {
-        print("Database: In-memory database")
-    } else {
-        print("Database: \(dbPath)")
-    }
-    print("Type '.exit' to quit, '.schema' to show database schema")
-    print()
+	// Check if we're connected to a terminal
+	let isInteractive = isatty(STDIN_FILENO) != 0 && isatty(STDOUT_FILENO) != 0
 
-    // Execute SQL file if provided
-    if let sqlFile = sqlFile {
-        let shouldContinue = executeCommandsFromFile(filePath: sqlFile, database: database)
-        if !shouldContinue {
-            print("Goodbye!")
-            exit(0)
-        }
-        print()
-    }
+	if isInteractive {
+		print(productName)
+		if isInMemory {
+			print("Database: In-memory database")
+		} else {
+			print("Database: \(dbPath)")
+		}
+		print("Type '.exit' to quit, '.schema' to show database schema")
+		print()
+	}
 
-    // Command history
-    var history: [String] = []
-    var historyIndex = 0
+	// Execute SQL file if provided
+	if let sqlFile = sqlFile {
+		let shouldContinue = executeCommandsFromFile(
+			filePath: sqlFile,
+			database: database
+		)
+		if !shouldContinue {
+			if isInteractive {
+				print("Goodbye!")
+			}
+			exit(0)
+		}
+		if isInteractive {
+			print()
+		}
+	}
 
-    // Setup raw terminal mode for arrow key handling
-    setupRawMode()
+	if isInteractive {
+		runInteractiveMode(database: database)
+	} else {
+		runNonInteractiveMode(database: database)
+	}
+}
 
-    // Setup signal handler to restore terminal on exit
-    signal(SIGINT) { _ in
-        restoreTerminal()
-        exit(0)
-    }
+func runInteractiveMode(database: RBDB) {
+	// Command history
+	var history: [String] = []
+	var historyIndex = 0
 
-    // Main loop
-    while true {
-        print("sql> ", terminator: "")
-        fflush(stdout)
+	// Setup raw terminal mode for arrow key handling
+	setupRawMode()
 
-        guard let input = readLineWithHistory(history: &history, historyIndex: &historyIndex) else {
-            break
-        }
+	// Setup signal handler to restore terminal on exit
+	signal(SIGINT) { _ in
+		restoreTerminal()
+		exit(0)
+	}
 
-        let command = input.trimmingCharacters(in: .whitespacesAndNewlines)
+	// Main loop
+	while true {
+		print("sql> ", terminator: "")
+		fflush(stdout)
 
-        if command.isEmpty {
-            continue
-        }
+		guard
+			let input = readLineWithHistory(
+				history: &history,
+				historyIndex: &historyIndex
+			)
+		else {
+			break
+		}
 
-        if command == ".exit" {
-            break
-        }
+		let command = input.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if command == ".schema" {
-            displaySchema(database: database)
-            print()
-            continue
-        }
+		if command.isEmpty {
+			continue
+		}
 
-        // Add to history if it's not empty and not the same as the last command
-        if !command.isEmpty && (history.isEmpty || history.last != command) {
-            history.append(command)
-        }
-        historyIndex = history.count
+		if command == ".exit" {
+			break
+		}
 
-        // Execute SQL command
-        do {
-			let results = try database.query(command)
-			print(formatTable(results))
-        } catch {
-            print("Error: \(error)")
-        }
+		if command == ".schema" {
+			displaySchema(database: database)
+			print()
+			continue
+		}
 
-        print()
-    }
+		// Add to history if it's not empty and not the same as the last command
+		if !command.isEmpty && (history.isEmpty || history.last != command) {
+			history.append(command)
+		}
+		historyIndex = history.count
 
-    // Restore terminal mode
-    restoreTerminal()
+		// Execute SQL command
+		executeCommand(command, database: database)
+		print()
+	}
 
-    print("Goodbye!")
+	// Restore terminal mode
+	restoreTerminal()
+
+	print("Goodbye!")
+}
+
+func runNonInteractiveMode(database: RBDB) {
+	// Read from stdin line by line
+	while let line = readLine() {
+		let command = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+		if command.isEmpty {
+			continue
+		}
+
+		if command == ".exit" {
+			break
+		}
+
+		if command == ".schema" {
+			displaySchema(database: database)
+			continue
+		}
+
+		executeCommand(command, database: database)
+	}
+}
+
+func executeCommand(_ command: String, database: RBDB) {
+	do {
+		let results = try database.query(command)
+		print(formatTable(results))
+	} catch {
+		print("Error: \(error)")
+	}
 }
 
 main()

@@ -252,7 +252,7 @@ public class SQLiteDatabase {
 						let doubleValue = sqlite3_column_double(statement, i)
 						row[columnName] = doubleValue
 					case SQLITE_NULL:
-						row[columnName] = nil
+						row[columnName] = NSNull()
 					default:
 						throw SQLiteError.queryError(
 							"Unexpected column type in result set: \(columnType)"
