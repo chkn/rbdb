@@ -41,13 +41,18 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	@discardableResult
-	public override func query(_ sql: String) throws -> [[String: Any?]] {
+	public override func query(_ sql: String, startOffset: Int = 0) throws
+		-> [[String: Any?]]
+	{
 		do {
-			return try super.query(sql)
+			return try super.query(sql, startOffset: startOffset)
 		} catch let error as SQLiteError {
-			if try rescue(error: error) {
-				// Now try the original query again
-				return try super.query(sql)
+			// Only attempt to rescue if we have an offset to resume from, so
+			//  we don't risk re-executing any potentially non-idempotent commands.
+			if case .queryError(_, let offset) = error, let offset = offset,
+				try rescue(error: error)
+			{
+				return try super.query(sql, startOffset: offset)
 			}
 			throw error
 		}
@@ -161,16 +166,21 @@ public class RBDB: SQLiteDatabase {
 			)
 
 			try super.query("COMMIT")
-			
+
 			// Immediately create the view and trigger so the table is usable
-			try createViewAndTrigger(for: createTable.tableName, columns: createTable.columnNames)
+			try createViewAndTrigger(
+				for: createTable.tableName,
+				columns: createTable.columnNames
+			)
 		} catch {
 			try super.query("ROLLBACK")
 			throw error
 		}
 	}
 
-	private func createViewAndTrigger(for tableName: String, columns: [String]) throws {
+	private func createViewAndTrigger(for tableName: String, columns: [String])
+		throws
+	{
 		let columnList = columns.map { "[\($0)]" }.joined(separator: ", ")
 		var selectList: [String] = []
 		selectList.reserveCapacity(columns.count)
@@ -211,7 +221,7 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	private func rescue(error: SQLiteError) throws -> Bool {
-		if case .queryError(let msg) = error,
+		if case .queryError(let msg, _) = error,
 			let match = msg.firstMatch(of: /no such table: ([^\s]+)/)
 		{
 			let predicateResult = try super.query(
@@ -224,7 +234,9 @@ public class RBDB: SQLiteDatabase {
 			guard
 				let columnNamesJson = predicateResult[0]["json_array"]
 					as? String,
-				let columnNamesData = columnNamesJson.data(using: .utf8),
+				let columnNamesData = columnNamesJson.data(
+					using: String.Encoding.utf8
+				),
 				let columnNames = try JSONSerialization.jsonObject(
 					with: columnNamesData
 				) as? [String],

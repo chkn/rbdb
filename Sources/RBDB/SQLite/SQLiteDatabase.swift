@@ -5,7 +5,9 @@ public enum SQLiteError: Error {
 	case couldNotOpenDatabase(String)
 	case couldNotRegisterFunction(name: String)
 	case queryParameterCount(expected: Int, got: Int)
-	case queryError(String)
+
+	/// Error running a query. Gives a byte offset in the query of the failing statement, if possible.
+	case queryError(String, offset: Int? = nil)
 }
 
 public class SQLiteDatabase {
@@ -45,11 +47,16 @@ public class SQLiteDatabase {
 	}
 
 	/// Runs one or more SQL statements, returning the result set from the last one.
+	///  If specified, `startOffset` indicates a byte offset within `sql` from which
+	///    to start executing.
 	@discardableResult
-	public func query(_ sql: String) throws -> [[String: Any?]] {
+	public func query(_ sql: String, startOffset: Int = 0) throws -> [[String:
+		Any?]]
+	{
 		return try sql.withCString { sqlCString in
 			var finalResults: [[String: Any?]] = []
-			var remainingSQL: UnsafePointer<CChar>? = sqlCString
+			let startPointer = sqlCString.advanced(by: startOffset)
+			var remainingSQL: UnsafePointer<CChar>? = startPointer
 
 			while let currentSQL = remainingSQL, currentSQL.pointee != 0 {
 				var statement: OpaquePointer?
@@ -60,7 +67,11 @@ public class SQLiteDatabase {
 						== SQLITE_OK
 				else {
 					let errmsg = String(cString: sqlite3_errmsg(db))
-					throw SQLiteError.queryError(errmsg)
+					let failedOffset = currentSQL - sqlCString
+					throw SQLiteError.queryError(
+						errmsg,
+						offset: Int(failedOffset)
+					)
 				}
 				defer {
 					sqlite3_finalize(statement)
@@ -68,11 +79,25 @@ public class SQLiteDatabase {
 
 				// statement will be nil here (but sqlite3_prepare_v2 succeeded) if currentSQL is whitespace
 				if let statement = statement {
-					let statementResults = try readRows(in: statement)
+					do {
+						let statementResults = try readRows(in: statement)
 
-					// Keep results from the last statement that produced results
-					if !statementResults.isEmpty {
-						finalResults = statementResults
+						// Keep results from the last statement that produced results
+						if !statementResults.isEmpty {
+							finalResults = statementResults
+						}
+					} catch {
+						let failedOffset = currentSQL - sqlCString
+						if case .queryError(let message, _) = error
+							as? SQLiteError
+						{
+							throw SQLiteError.queryError(
+								message,
+								offset: Int(failedOffset)
+							)
+						}
+
+						throw error
 					}
 				}
 
@@ -125,7 +150,10 @@ public class SQLiteDatabase {
 								paramIndex,
 								bindCStr,
 								-1,
-								unsafeBitCast(-1, to: sqlite3_destructor_type.self) // SQLITE_TRANSIENT
+								unsafeBitCast(
+									-1,
+									to: sqlite3_destructor_type.self
+								)  // SQLITE_TRANSIENT
 							)
 						}) == SQLITE_OK
 					else {
@@ -174,7 +202,7 @@ public class SQLiteDatabase {
 							paramIndex,
 							bytes.baseAddress,
 							Int32(dataValue.count),
-							unsafeBitCast(-1, to: sqlite3_destructor_type.self) // SQLITE_TRANSIENT
+							unsafeBitCast(-1, to: sqlite3_destructor_type.self)  // SQLITE_TRANSIENT
 						)
 					}
 					guard result == SQLITE_OK else {
@@ -272,4 +300,3 @@ public class SQLiteDatabase {
 		return statementResults
 	}
 }
-
