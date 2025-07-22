@@ -166,16 +166,18 @@ public class RBDB: SQLiteDatabase {
 			)
 
 			try super.query("COMMIT")
-
-			// Immediately create the view and trigger so the table is usable
-			try createViewAndTrigger(
-				for: createTable.tableName,
-				columns: createTable.columnNames
-			)
 		} catch {
 			try super.query("ROLLBACK")
 			throw error
 		}
+
+		// Optimization: Since we already have the column names parsed out, let's just
+		// create the view and trigger too, so the table is usable right away.
+		// If this fails, ignore the error - rescue will handle it later when needed
+		try? createViewAndTrigger(
+			for: createTable.tableName,
+			columns: createTable.columnNames
+		)
 	}
 
 	private func createViewAndTrigger(for tableName: String, columns: [String])
