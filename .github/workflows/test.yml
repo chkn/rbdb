@@ -13,7 +13,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Build and run tests in Docker
-      run: |
-        docker build -t rbdb-test .
-        docker run --rm rbdb-test
+    - name: Build Docker image
+      run: docker build -t rbdb-test .
+
+    - name: Run tests
+      run: docker run --rm rbdb-test swift test
+
+    - name: Check code formatting
+      run: docker run --rm rbdb-test swift format lint -s --recursive .

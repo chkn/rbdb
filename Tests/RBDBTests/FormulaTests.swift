@@ -102,8 +102,7 @@ import Testing
 	}
 }
 
-@Test func formulasWithDifferentVariableNamesCanonicalizeEqually() async throws
-{
+@Test func formulasWithDifferentVariableNamesCanonicalizeEqually() async throws {
 	// Test that formulas with the same structure but different variable names
 	// become equal after parsing and canonicalization
 

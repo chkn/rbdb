@@ -26,5 +26,3 @@ RUN mkdir -p /usr/lib/swift/linux \
 
 WORKDIR /app
 COPY . .
-
-CMD ["swift", "test"]

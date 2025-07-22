@@ -1,4 +1,3 @@
-
 public enum SymbolType: Comparable {
 	// terms
 	case constant
@@ -30,7 +29,10 @@ extension SymbolType: Codable {
 		if let value = SymbolType(stringValue: str) {
 			self = value
 		} else {
-			throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Invalid SymbolType string \(str)"))
+			throw DecodingError.dataCorrupted(
+				DecodingError.Context(
+					codingPath: decoder.codingPath,
+					debugDescription: "Invalid SymbolType string \(str)"))
 		}
 	}
 

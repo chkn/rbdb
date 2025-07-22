@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "RBDB",
+	name: "RBDB",
 	platforms: [
 		.macOS(.v13),
 		.iOS(.v12),
@@ -18,22 +18,22 @@ let package = Package(
 			name: "sql",
 			targets: ["SQLCLITool"]),
 	],
-    targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-        .target(
+	targets: [
+		// Targets are the basic building blocks of a package, defining a module or a test suite.
+		// Targets can depend on other targets in this package and products from dependencies.
+		.target(
 			name: "RBDB",
 			resources: [
 				.embedInCode("schema.sql")
 			]
 		),
-        .executableTarget(
-            name: "SQLCLITool",
-            dependencies: ["RBDB"]
-        ),
-        .testTarget(
-            name: "RBDBTests",
-            dependencies: ["RBDB"]
-        ),
-    ]
+		.executableTarget(
+			name: "SQLCLITool",
+			dependencies: ["RBDB"]
+		),
+		.testTarget(
+			name: "RBDBTests",
+			dependencies: ["RBDB"]
+		),
+	]
 )

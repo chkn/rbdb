@@ -15,9 +15,10 @@ import Testing
 }
 
 @Test func serializeQuantifiedType() async throws {
-    try assertJSON(SymbolType.quantified(.predicate(name: "Foo")), expect: "\"@Foo#\"")
+	try assertJSON(SymbolType.quantified(.predicate(name: "Foo")), expect: "\"@Foo#\"")
 }
 
 @Test func serializeNestedQuantifiedType() async throws {
-    try assertJSON(SymbolType.quantified(.quantified(.predicate(name: "Foo"))), expect: "\"@Foo##\"")
+	try assertJSON(
+		SymbolType.quantified(.quantified(.predicate(name: "Foo"))), expect: "\"@Foo##\"")
 }
