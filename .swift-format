@@ -1,0 +1,10 @@
+{
+  "indentation" : {
+    "tabs" : 1
+  },
+  "rules" : {
+    "OrderedImports" : false
+  },
+  "tabWidth" : 4,
+  "version" : 1
+}

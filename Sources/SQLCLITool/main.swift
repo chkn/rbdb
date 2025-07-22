@@ -1,6 +1,3 @@
-import Foundation
-import RBDB
-
 #if os(macOS) || os(iOS)
 	import Darwin
 	typealias TerminalFlag = UInt
@@ -11,6 +8,9 @@ import RBDB
 #else
 	#error("Unknown platform")
 #endif
+
+import Foundation
+import RBDB
 
 let productName = "RBDB Interactive SQL Console"
 
@@ -65,8 +65,7 @@ func displaySchema(database: SQLiteDatabase) {
 	}
 }
 
-func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
-{
+func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool {
 	do {
 		let content = try String(contentsOfFile: filePath, encoding: .utf8)
 
