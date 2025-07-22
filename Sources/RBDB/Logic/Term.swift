@@ -38,7 +38,8 @@ public enum Term: Symbol {
 		}
 
 		// Try to parse as quoted string
-		if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"")
+		if ((trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""))
+			|| (trimmed.hasPrefix("'") && trimmed.hasSuffix("'")))
 			&& trimmed.count >= 2
 		{
 			let stringValue = String(trimmed.dropFirst().dropLast())
