@@ -54,6 +54,10 @@ struct RBDBSchemaTests {
 	func generatedColumnsWork() async throws {
 		let rbdb = try RBDB(path: ":memory:")
 
+		// Create predicate tables first
+		try rbdb.query("CREATE TABLE parent(parent, child)")
+		try rbdb.query("CREATE TABLE likes(who, what)")
+
 		// Insert test rules with constant arguments
 		try rbdb.assert(
 			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
@@ -121,5 +125,64 @@ struct RBDBSchemaTests {
 		let planText2 = queryPlan2.compactMap { $0["detail"] as? String }.joined(separator: " ")
 		#expect(planText2.contains("USING INDEX"), "Query should use an index")
 		#expect(planText2.contains("arg2_constant"), "Query plan should mention arg2_constant")
+	}
+
+	@Test("assert(formula:) throws queryError for non-existent predicate")
+	func assertThrowsForNonExistentPredicate() async throws {
+		let rbdb = try RBDB(path: ":memory:")
+
+		// Verify the error message is correct
+		do {
+			try rbdb.assert(formula: .predicate(name: "foo", arguments: [.string("bar")]))
+			#expect(Bool(false), "Should have thrown an error")
+		} catch let error as SQLiteError {
+			if case .queryError(let message, _) = error {
+				#expect(
+					message == "no such table: foo", "Error message should match expected format")
+			} else {
+				#expect(Bool(false), "Should be a queryError")
+			}
+		}
+	}
+
+	@Test("assert(formula:) works for existing predicates")
+	func assertWorksForExistingPredicates() async throws {
+		let rbdb = try RBDB(path: ":memory:")
+
+		// Create a predicate table first
+		try rbdb.query("CREATE TABLE parent(parent, child)")
+
+		// Now assert should work
+		try rbdb.assert(
+			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
+
+		// Verify the rule was inserted
+		let results = try rbdb.query("SELECT COUNT(*) as count FROM _rule")
+		#expect(results[0]["count"] as? Int64 == 1, "Should have one rule")
+	}
+
+	@Test("assert(formula:) validates predicates in quantified formulas")
+	func assertValidatesQuantifiedFormulas() async throws {
+		let rbdb = try RBDB(path: ":memory:")
+
+		// Try to assert a quantified formula with non-existent predicate
+		let variable = Var()
+		let quantifiedFormula = Formula.quantified(
+			.thereExists, variable,
+			.predicate(name: "nonexistent", arguments: [.variable(variable)]))
+
+		// Verify the error message
+		do {
+			try rbdb.assert(formula: quantifiedFormula)
+			#expect(Bool(false), "Should have thrown an error")
+		} catch let error as SQLiteError {
+			if case .queryError(let message, _) = error {
+				#expect(
+					message == "no such table: nonexistent",
+					"Error message should match expected format")
+			} else {
+				#expect(Bool(false), "Should be a queryError")
+			}
+		}
 	}
 }

@@ -74,6 +74,9 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	public func assert(formula: Formula) throws {
+		// Validate that all predicates referenced in the formula exist
+		try validatePredicatesExist(in: formula)
+
 		let jsonStr = try formulaToJSON(formula)
 
 		try super.query("BEGIN TRANSACTION")
@@ -92,6 +95,27 @@ public class RBDB: SQLiteDatabase {
 			try super.query("ROLLBACK")
 			throw error
 		}
+	}
+
+	private func validatePredicatesExist(in formula: Formula) throws {
+		var predicateNames = PredicateNameExtractor.run(formula)
+		guard !predicateNames.isEmpty else { return }
+
+		let placeholders = Array(repeating: "?", count: predicateNames.count).joined(
+			separator: ", ")
+		let results = try super.query(
+			"SELECT name FROM _predicate WHERE name IN (\(placeholders))",
+			parameters: Array(predicateNames)
+		)
+		guard results.count != predicateNames.count else { return }
+
+		for row in results {
+			if let name = row["name"] as? String {
+				predicateNames.remove(name)
+			}
+		}
+
+		throw SQLiteError.queryError("no such table: \(predicateNames.first!)")
 	}
 
 	private func sqlForInsert(ofFormula expr: String, usingParameters: Bool)
