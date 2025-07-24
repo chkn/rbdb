@@ -3,7 +3,8 @@
     "tabs" : 1
   },
   "rules" : {
-    "OrderedImports" : false
+    "OrderedImports" : false,
+    "NoLeadingUnderscores" : true
   },
   "tabWidth" : 4,
   "version" : 1

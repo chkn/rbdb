@@ -5,6 +5,7 @@ public protocol Symbol: Comparable, Codable, LosslessStringConvertible {
 
 public protocol SymbolVisitor {
 	func visit(formula: Formula) -> Formula
+	func visit(predicate: String, arguments: [Term]) -> Formula
 	func visit(term: Term) -> Term
 	func visit(variable: Var) -> Var
 }

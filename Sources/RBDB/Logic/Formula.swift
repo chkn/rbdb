@@ -122,10 +122,14 @@ extension SymbolVisitor {
 	public func visit(formula: Formula) -> Formula {
 		switch formula {
 		case .predicate(let name, arguments: let args):
-			.predicate(name: name, arguments: args.map(self.visit(term:)))
+			visit(predicate: name, arguments: args)
 		case .quantified(let q, let v, let body):
-			.quantified(q, self.visit(variable: v), self.visit(formula: body))
+			.quantified(q, visit(variable: v), visit(formula: body))
 		}
+	}
+
+	public func visit(predicate: String, arguments: [Term]) -> Formula {
+		.predicate(name: predicate, arguments: arguments.map(visit(term:)))
 	}
 }
 
