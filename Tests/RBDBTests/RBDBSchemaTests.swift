@@ -3,7 +3,6 @@ import Testing
 
 @testable import RBDB
 
-@Suite("RBDB Schema Initialization")
 struct RBDBSchemaTests {
 
 	@Test("Tables are created on RBDB initialization")
@@ -49,5 +48,78 @@ struct RBDBSchemaTests {
 		} else {
 			#expect(Bool(false), "entity_id should be Data/BLOB type")
 		}
+	}
+
+	@Test("Generated columns arg1_constant and arg2_constant work correctly")
+	func generatedColumnsWork() async throws {
+		let rbdb = try RBDB(path: ":memory:")
+
+		// Insert test rules with constant arguments
+		try rbdb.assert(
+			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
+		try rbdb.assert(
+			formula: .predicate(name: "likes", arguments: [.string("charlie"), .number(42)]))
+
+		// Query the generated columns
+		let results = try rbdb.query(
+			"""
+				SELECT arg1_constant, arg2_constant, output_type 
+				FROM _rule 
+				ORDER BY output_type
+			""")
+
+		#expect(results.count == 2, "Should have two rules")
+
+		// Check likes rule
+		let likesRule = results.first { ($0["output_type"] as? String) == "@likes" }!
+		#expect(likesRule["arg1_constant"] as? String == "charlie")
+		#expect(likesRule["arg2_constant"] as? Int64 == 42)
+
+		// Check parent rule
+		let parentRule = results.first { ($0["output_type"] as? String) == "@parent" }!
+		#expect(parentRule["arg1_constant"] as? String == "alice")
+		#expect(parentRule["arg2_constant"] as? String == "bob")
+	}
+
+	@Test("Queries using generated columns should use indexes")
+	func queriesUseIndexes() async throws {
+		let rbdb = try RBDB(path: ":memory:")
+
+		try rbdb.query("CREATE TABLE parent(parent, child)")
+		try rbdb.query("CREATE TABLE likes(who, what)")
+
+		// Insert test data
+		try rbdb.assert(
+			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
+		try rbdb.assert(
+			formula: .predicate(name: "parent", arguments: [.string("charlie"), .string("dave")]))
+		try rbdb.assert(
+			formula: .predicate(name: "likes", arguments: [.string("alice"), .number(42)]))
+
+		// Query using arg1_constant and check query plan
+		let queryPlan1 = try rbdb.query(
+			"""
+				EXPLAIN QUERY PLAN 
+				SELECT * FROM parent 
+				WHERE parent = 'alice'
+			""")
+
+		// Verify that an index is being used and mentions arg1_constant
+		let planText1 = queryPlan1.compactMap { $0["detail"] as? String }.joined(separator: " ")
+		#expect(planText1.contains("USING INDEX"), "Query should use an index")
+		#expect(planText1.contains("arg1_constant"), "Query plan should mention arg1_constant")
+
+		// Query using arg2_constant and check query plan
+		let queryPlan2 = try rbdb.query(
+			"""
+				EXPLAIN QUERY PLAN 
+				SELECT * FROM parent 
+				WHERE child = 'bob'
+			""")
+
+		// Verify that an index is being used and mentions arg2_constant
+		let planText2 = queryPlan2.compactMap { $0["detail"] as? String }.joined(separator: " ")
+		#expect(planText2.contains("USING INDEX"), "Query should use an index")
+		#expect(planText2.contains("arg2_constant"), "Query plan should mention arg2_constant")
 	}
 }

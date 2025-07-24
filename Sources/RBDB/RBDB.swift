@@ -189,7 +189,10 @@ public class RBDB: SQLiteDatabase {
 		for i in 1...columns.count {
 			// We're selecting WHERE output_type is a predicate formula,
 			//  so all its parameters should be constants (we don't allow free vars)
-			selectList.append("json_extract(formula, '$[\(i)].\"\"')")
+			switch i {
+			case 1...2: selectList.append("arg\(i)_constant")
+			default: selectList.append("json_extract(formula, '$[\(i)].\"\"')")
+			}
 		}
 		let createViewSQL =
 			"""
