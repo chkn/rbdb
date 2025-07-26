@@ -215,7 +215,7 @@ public class RBDB: SQLiteDatabase {
 			//  so all its parameters should be constants (we don't allow free vars)
 			switch i {
 			case 1...2: selectList.append("arg\(i)_constant")
-			default: selectList.append("json_extract(formula, '$[\(i)].\"\"')")
+			default: selectList.append("json_extract(formula, '$[1][\(i-1)].\"\"')")
 			}
 		}
 		let createViewSQL =

@@ -11,12 +11,12 @@ public enum SymbolType: Comparable {
 	}
 
 	// formulas
-	case predicate(name: String)
+	case hornClause(positiveName: String)
 	indirect case quantified(SymbolType)
 
 	public var isFormula: Bool {
 		switch self {
-		case .predicate, .quantified: true
+		case .hornClause, .quantified: true
 		default: false
 		}
 	}
@@ -48,7 +48,7 @@ extension SymbolType: CodingKey {
 		switch self {
 		case .constant: ""
 		case .variable: "v"
-		case .predicate(name: let name): "@\(name)"
+		case .hornClause(positiveName: let name): "@\(name)"
 		case .quantified(let ty): "\(ty.stringValue)#"
 		}
 	}
@@ -58,7 +58,7 @@ extension SymbolType: CodingKey {
 			guard let ty = SymbolType(stringValue: str) else { return nil }
 			self = .quantified(ty)
 		} else if stringValue.first == "@" {
-			self = .predicate(name: String(stringValue.dropFirst()))
+			self = .hornClause(positiveName: String(stringValue.dropFirst()))
 		} else {
 			switch stringValue {
 			case "": self = .constant

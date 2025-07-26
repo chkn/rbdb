@@ -1,24 +1,39 @@
 public enum Formula: Symbol {
-	case predicate(Predicate)
+	case hornClause(positive: Predicate, negative: [Predicate])
 	indirect case quantified(
 		_ quantifier: Quantifier,
 		_ variable: Var,
 		_ body: Formula
 	)
 
+	public static func predicate(_ predicate: Predicate) -> Formula {
+		.hornClause(positive: predicate, negative: [])
+	}
+
 	public var type: SymbolType {
 		switch self {
-		case .predicate(let predicate): .predicate(name: predicate.name)
+		case .hornClause(positive: let positive, negative: _):
+			.hornClause(positiveName: positive.name)
 		case .quantified(_, _, let body): .quantified(body.type)
 		}
 	}
 
 	public var description: String {
 		switch self {
-		case .predicate(let predicate):
-			"\(predicate.name)(\(predicate.arguments.map({ String(describing: $0) }).joined(separator: ", ")))"
+		case .hornClause(positive: let predicate, negative: let negatives):
+			let positiveStr = String(describing: predicate)
+			if negatives.isEmpty {
+				return positiveStr
+			}
+
+			var negativeStr = negatives.map { String(describing: $0) }.joined(separator: " ∧ ")
+			if negatives.count > 1 {
+				negativeStr = "(\(negativeStr))"
+			}
+
+			return "\(negativeStr) -> \(positiveStr)"
 		case .quantified(let quantifier, let v, let body):
-			"\(quantifier)\(v) \(body)"
+			return "\(quantifier)\(v) \(body)"
 		}
 	}
 
@@ -26,6 +41,38 @@ public enum Formula: Symbol {
 		var trimmed = description.trimmingCharacters(
 			in: .whitespacesAndNewlines
 		)
+
+		// Try horn clause: "negatives -> positive"
+		if let arrowIndex = trimmed.range(of: " -> ") {
+			let negativesStr = String(trimmed[..<arrowIndex.lowerBound]).trimmingCharacters(
+				in: .whitespacesAndNewlines)
+			let positiveStr = String(trimmed[arrowIndex.upperBound...]).trimmingCharacters(
+				in: .whitespacesAndNewlines)
+
+			// Parse positive predicate
+			guard let positive = Predicate(positiveStr) else { return nil }
+
+			// Parse negative predicates
+			var negatives: [Predicate] = []
+
+			// Handle parentheses around multiple negatives: "(foo(x) ∧ bar(y))"
+			var negativesPart = negativesStr
+			if negativesPart.hasPrefix("(") && negativesPart.hasSuffix(")") {
+				negativesPart = String(negativesPart.dropFirst().dropLast())
+			}
+
+			// Split by " ∧ " for multiple negatives
+			let negativeStrs = negativesPart.components(separatedBy: " ∧ ")
+			for negativeStr in negativeStrs {
+				let trimmedNegative = negativeStr.trimmingCharacters(in: .whitespacesAndNewlines)
+				guard let negative = Predicate(trimmedNegative) else { return nil }
+				negatives.append(negative)
+			}
+
+			self = .hornClause(positive: positive, negative: negatives)
+			return
+		}
+
 		if trimmed.hasPrefix("(") && trimmed.hasSuffix(")") {
 			trimmed = String(trimmed.dropFirst().dropLast())
 		}
@@ -79,8 +126,11 @@ public enum Formula: Symbol {
 extension SymbolVisitor {
 	public func visit(formula: Formula) -> Formula {
 		switch formula {
-		case .predicate(let predicate):
-			.predicate(visit(predicate: predicate))
+		case .hornClause(positive: let positive, negative: let negatives):
+			.hornClause(
+				positive: visit(predicate: positive),
+				negative: negatives.map { visit(predicate: $0) }
+			)
 		case .quantified(let q, let v, let body):
 			.quantified(q, visit(variable: v), visit(formula: body))
 		}
@@ -97,12 +147,19 @@ extension Formula: Codable {
 		let key = try arr.decode(SymbolType.self)
 
 		switch key {
-		case .predicate(let name):
+		case .hornClause(let positiveName):
 			var args: [Term] = []
-			while !arr.isAtEnd {
-				args.append(try arr.decode(Term.self))
+			var positiveArgs = try arr.nestedUnkeyedContainer()
+			while !positiveArgs.isAtEnd {
+				args.append(try positiveArgs.decode(Term.self))
 			}
-			self = .predicate(Predicate(name: name, arguments: args))
+			let positive = Predicate(name: positiveName, arguments: args)
+
+			var negatives: [Predicate] = []
+			while !arr.isAtEnd {
+				negatives.append(try arr.decode(Predicate.self))
+			}
+			self = .hornClause(positive: positive, negative: negatives)
 		case .quantified:
 			self = .quantified(
 				try arr.decode(Quantifier.self),
@@ -121,14 +178,17 @@ extension Formula: Codable {
 
 	public func encode(to encoder: Encoder) throws {
 		var arr = encoder.unkeyedContainer()
+		try arr.encode(type)
 		switch self {
-		case .predicate(let predicate):
-			try arr.encode(SymbolType.predicate(name: predicate.name))
-			for arg in predicate.arguments {
-				try arr.encode(arg)
+		case .hornClause(positive: let positive, negative: let negatives):
+			var positiveArr = arr.nestedUnkeyedContainer()
+			for arg in positive.arguments {
+				try positiveArr.encode(arg)
+			}
+			for negative in negatives {
+				try arr.encode(negative)
 			}
 		case .quantified(let quantifier, let v, let body):
-			try arr.encode(SymbolType.quantified(body.type))
 			try arr.encode(quantifier)
 			try arr.encode(v.id)
 			try arr.encode(body)

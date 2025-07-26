@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS _rule (
     internal_entity_id INTEGER PRIMARY KEY REFERENCES _entity,
     formula BLOB UNIQUE NOT NULL, -- JSONB
     output_type TEXT GENERATED ALWAYS AS (formula->>0) VIRTUAL COLLATE NOCASE,
-    arg1_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[1].""')) VIRTUAL, -- NULL if arg is not a constant
-    arg2_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[2].""')) VIRTUAL  -- NULL if arg is not a constant
+    arg1_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[1][0].""')) VIRTUAL, -- NULL if arg is not a constant
+    arg2_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[1][1].""')) VIRTUAL  -- NULL if arg is not a constant
 ) STRICT;
 
 -- We must ensure that the LIKE optimization can be applied for output_type

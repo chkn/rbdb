@@ -6,7 +6,7 @@ import Testing
 @Test func serializePredicate() async throws {
 	try assertJSON(
 		Formula.predicate(Predicate(name: "Foo", arguments: [.string("bar")])),
-		expect: "[\"@foo\",{\"\":\"bar\"}]"
+		expect: "[\"@foo\",[{\"\":\"bar\"}]]"
 	)
 }
 
@@ -26,7 +26,7 @@ import Testing
 			a,
 			.predicate(Predicate(name: "Foo", arguments: [.variable(a)]))
 		),
-		expect: "[\"@foo#\",0,0,[\"@foo\",{\"v\":0}]]"
+		expect: "[\"@foo#\",0,0,[\"@foo\",[{\"v\":0}]]]"
 	)
 }
 
@@ -161,4 +161,34 @@ import Testing
 	#expect(complexCanonical1 == complexCanonical2)
 	#expect(complexCanonical2 == complexCanonical3)
 	#expect(complexCanonical1 == complexCanonical3)
+}
+
+@Test func parseHornClausesWithNegatives() async throws {
+	// Test parsing horn clauses with negative literals
+	// These should match the description format: "negatives -> positive"
+
+	// Test single negative literal
+	let singleNegative = "foo(\"x\") -> bar(\"y\")"
+	let expectedSingle = Formula.hornClause(
+		positive: Predicate(name: "bar", arguments: [.string("y")]),
+		negative: [Predicate(name: "foo", arguments: [.string("x")])]
+	)
+
+	// This should now work with the horn clause parsing implementation
+	let parsedSingle = Formula(singleNegative)
+	#expect(parsedSingle == expectedSingle, "Failed to parse single negative horn clause")
+
+	// Test multiple negative literals
+	let multipleNegatives = "(foo(\"x\") ∧ baz(\"z\")) -> bar(\"y\")"
+	let expectedMultiple = Formula.hornClause(
+		positive: Predicate(name: "bar", arguments: [.string("y")]),
+		negative: [
+			Predicate(name: "foo", arguments: [.string("x")]),
+			Predicate(name: "baz", arguments: [.string("z")]),
+		]
+	)
+
+	// This should now work with the horn clause parsing implementation
+	let parsedMultiple = Formula(multipleNegatives)
+	#expect(parsedMultiple == expectedMultiple, "Failed to parse multiple negative horn clause")
 }
