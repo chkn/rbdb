@@ -143,25 +143,3 @@ extension Term: Codable {
 		}
 	}
 }
-
-extension [Term]: @retroactive Comparable {
-	public static func < (lhs: Self, rhs: Self) -> Bool {
-		lhs.lexicographicallyPrecedes(rhs)
-	}
-}
-
-extension Bool: @retroactive Comparable {
-	public static func < (lhs: Bool, rhs: Bool) -> Bool {
-		// We use false < true.
-		//  This sort order is important, because SQLite uses 0 for false, and 1 for true,
-		//  so it will use the same sort order.
-		//
-		// lhs | rhs | result
-		// ------------------
-		//  f  |  t  |  t
-		//  f  |  f  |  f
-		//  t  |  t  |  f
-		//  t  |  f  |  f
-		!lhs && rhs
-	}
-}
