@@ -60,9 +60,11 @@ struct RBDBSchemaTests {
 
 		// Insert test rules with constant arguments
 		try rbdb.assert(
-			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
+			formula: .predicate(
+				Predicate(name: "parent", arguments: [.string("alice"), .string("bob")])))
 		try rbdb.assert(
-			formula: .predicate(name: "likes", arguments: [.string("charlie"), .number(42)]))
+			formula: .predicate(
+				Predicate(name: "likes", arguments: [.string("charlie"), .number(42)])))
 
 		// Query the generated columns
 		let results = try rbdb.query(
@@ -94,11 +96,14 @@ struct RBDBSchemaTests {
 
 		// Insert test data
 		try rbdb.assert(
-			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
+			formula: .predicate(
+				Predicate(name: "parent", arguments: [.string("alice"), .string("bob")])))
 		try rbdb.assert(
-			formula: .predicate(name: "parent", arguments: [.string("charlie"), .string("dave")]))
+			formula: .predicate(
+				Predicate(name: "parent", arguments: [.string("charlie"), .string("dave")])))
 		try rbdb.assert(
-			formula: .predicate(name: "likes", arguments: [.string("alice"), .number(42)]))
+			formula: .predicate(
+				Predicate(name: "likes", arguments: [.string("alice"), .number(42)])))
 
 		// Query using arg1_constant and check query plan
 		let queryPlan1 = try rbdb.query(
@@ -133,7 +138,8 @@ struct RBDBSchemaTests {
 
 		// Verify the error message is correct
 		do {
-			try rbdb.assert(formula: .predicate(name: "foo", arguments: [.string("bar")]))
+			try rbdb.assert(
+				formula: .predicate(Predicate(name: "foo", arguments: [.string("bar")])))
 			#expect(Bool(false), "Should have thrown an error")
 		} catch let error as SQLiteError {
 			if case .queryError(let message, _) = error {
@@ -154,7 +160,8 @@ struct RBDBSchemaTests {
 
 		// Now assert should work
 		try rbdb.assert(
-			formula: .predicate(name: "parent", arguments: [.string("alice"), .string("bob")]))
+			formula: .predicate(
+				Predicate(name: "parent", arguments: [.string("alice"), .string("bob")])))
 
 		// Verify the rule was inserted
 		let results = try rbdb.query("SELECT COUNT(*) as count FROM _rule")
@@ -169,7 +176,7 @@ struct RBDBSchemaTests {
 		let variable = Var()
 		let quantifiedFormula = Formula.quantified(
 			.thereExists, variable,
-			.predicate(name: "nonexistent", arguments: [.variable(variable)]))
+			.predicate(Predicate(name: "nonexistent", arguments: [.variable(variable)])))
 
 		// Verify the error message
 		do {

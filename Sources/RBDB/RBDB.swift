@@ -98,7 +98,7 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	private func validatePredicatesExist(in formula: Formula) throws {
-		var predicateNames = PredicateNameExtractor.run(formula)
+		var predicateNames = formula.getPredicateNames()
 		guard !predicateNames.isEmpty else { return }
 
 		let placeholders = Array(repeating: "?", count: predicateNames.count).joined(
@@ -370,7 +370,7 @@ func predicateFormulaSQLiteFunction(
 	}
 
 	// Create the Formula
-	let formula = Formula.predicate(name: predicateName, arguments: terms)
+	let formula = Formula.predicate(Predicate(name: predicateName, arguments: terms))
 
 	// Convert to JSON using the utility function
 	do {

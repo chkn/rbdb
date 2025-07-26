@@ -13,9 +13,10 @@ struct RBDBAssertTests {
 
 		// Create a simple predicate formula: user("Alice")
 		let formula = Formula.predicate(
-			name: "user",
-			arguments: [Term.string("Alice")]
-		)
+			Predicate(
+				name: "user",
+				arguments: [Term.string("Alice")]
+			))
 
 		try rbdb.assert(formula: formula)
 

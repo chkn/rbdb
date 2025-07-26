@@ -41,7 +41,7 @@ public enum Quantifier: Comparable, Codable, LosslessStringConvertible {
 }
 
 public enum Formula: Symbol {
-	case predicate(name: String, arguments: [Term])
+	case predicate(Predicate)
 	indirect case quantified(
 		_ quantifier: Quantifier,
 		_ variable: Var,
@@ -50,15 +50,15 @@ public enum Formula: Symbol {
 
 	public var type: SymbolType {
 		switch self {
-		case .predicate(let name, _): .predicate(name: name)
+		case .predicate(let predicate): .predicate(name: predicate.name)
 		case .quantified(_, _, let body): .quantified(body.type)
 		}
 	}
 
 	public var description: String {
 		switch self {
-		case .predicate(let name, arguments: let args):
-			"\(name)(\(args.map({ String(describing: $0) }).joined(separator: ", ")))"
+		case .predicate(let predicate):
+			"\(predicate.name)(\(predicate.arguments.map({ String(describing: $0) }).joined(separator: ", ")))"
 		case .quantified(let quantifier, let v, let body):
 			"\(quantifier)\(v) \(body)"
 		}
@@ -106,7 +106,7 @@ public enum Formula: Symbol {
 				}
 			}
 
-			self = .predicate(name: name, arguments: arguments)
+			self = .predicate(Predicate(name: name, arguments: arguments))
 			return
 		}
 
@@ -121,15 +121,15 @@ public enum Formula: Symbol {
 extension SymbolVisitor {
 	public func visit(formula: Formula) -> Formula {
 		switch formula {
-		case .predicate(let name, arguments: let args):
-			visit(predicate: name, arguments: args)
+		case .predicate(let predicate):
+			.predicate(visit(predicate: predicate))
 		case .quantified(let q, let v, let body):
 			.quantified(q, visit(variable: v), visit(formula: body))
 		}
 	}
 
-	public func visit(predicate: String, arguments: [Term]) -> Formula {
-		.predicate(name: predicate, arguments: arguments.map(visit(term:)))
+	public func visit(predicate: Predicate) -> Predicate {
+		Predicate(name: predicate.name, arguments: predicate.arguments.map(visit(term:)))
 	}
 }
 
@@ -144,7 +144,7 @@ extension Formula: Codable {
 			while !arr.isAtEnd {
 				args.append(try arr.decode(Term.self))
 			}
-			self = .predicate(name: name, arguments: args)
+			self = .predicate(Predicate(name: name, arguments: args))
 		case .quantified:
 			self = .quantified(
 				try arr.decode(Quantifier.self),
@@ -164,9 +164,9 @@ extension Formula: Codable {
 	public func encode(to encoder: Encoder) throws {
 		var arr = encoder.unkeyedContainer()
 		switch self {
-		case .predicate(let name, let args):
-			try arr.encode(SymbolType.predicate(name: name))
-			for arg in args {
+		case .predicate(let predicate):
+			try arr.encode(SymbolType.predicate(name: predicate.name))
+			for arg in predicate.arguments {
 				try arr.encode(arg)
 			}
 		case .quantified(let quantifier, let v, let body):

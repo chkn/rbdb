@@ -5,8 +5,8 @@ import Testing
 
 @Test func serializePredicate() async throws {
 	try assertJSON(
-		Formula.predicate(name: "Foo", arguments: [.string("bar")]),
-		expect: "[\"@Foo\",{\"\":\"bar\"}]"
+		Formula.predicate(Predicate(name: "Foo", arguments: [.string("bar")])),
+		expect: "[\"@foo\",{\"\":\"bar\"}]"
 	)
 }
 
@@ -24,74 +24,76 @@ import Testing
 		Formula.quantified(
 			.forAll,
 			a,
-			.predicate(name: "Foo", arguments: [.variable(a)])
+			.predicate(Predicate(name: "Foo", arguments: [.variable(a)]))
 		),
-		expect: "[\"@Foo#\",0,0,[\"@Foo\",{\"v\":0}]]"
+		expect: "[\"@foo#\",0,0,[\"@foo\",{\"v\":0}]]"
 	)
 }
 
 // String conversion tests
 @Test func formulaStringConversions() async throws {
 	// Test simple predicate
-	let simple = Formula.predicate(name: "Foo", arguments: [])
-	#expect(simple.description == "Foo()")
-	#expect(Formula("Foo()") == simple)
+	let simple = Formula.predicate(Predicate(name: "Foo", arguments: []))
+	#expect(simple.description == "foo()")
+	#expect(Formula("foo()") == simple)
 
 	// Test predicate with arguments
 	let withArgs = Formula.predicate(
-		name: "Bar",
-		arguments: [.string("hello"), .number(42.0), .boolean(true)]
-	)
-	#expect(withArgs.description == "Bar(\"hello\", 42.0, true)")
-	#expect(Formula("Bar(\"hello\", 42.0, true)") == withArgs)
+		Predicate(
+			name: "Bar",
+			arguments: [.string("hello"), .number(42.0), .boolean(true)]
+		))
+	#expect(withArgs.description == "bar(\"hello\", 42.0, true)")
+	#expect(Formula("bar(\"hello\", 42.0, true)") == withArgs)
 
 	// Test quantified formula
 	let varA = Var(id: 0)
 	let quantified = Formula.quantified(
 		.forAll,
 		varA,
-		.predicate(name: "P", arguments: [.variable(varA)])
+		.predicate(Predicate(name: "P", arguments: [.variable(varA)]))
 	)
-	#expect(quantified.description == "∀a P(a)")
-	#expect(Formula("∀a P(a)") == quantified)
-	#expect(Formula("∀a(P(a))") == quantified)
+	#expect(quantified.description == "∀a p(a)")
+	#expect(Formula("∀a p(a)") == quantified)
+	#expect(Formula("∀a(p(a))") == quantified)
 
 	// Test text quantified formulas
-	#expect(Formula("forall a P(a)") == quantified)
-	#expect(Formula("forall a. P(a)") == quantified)
+	#expect(Formula("forall a p(a)") == quantified)
+	#expect(Formula("forall a. p(a)") == quantified)
 
 	let existential = Formula.quantified(
 		.thereExists,
 		varA,
-		.predicate(name: "P", arguments: [.variable(varA)])
+		.predicate(Predicate(name: "P", arguments: [.variable(varA)]))
 	)
-	#expect(Formula("exists a P(a)") == existential)
-	#expect(Formula("exists a. P(a)") == existential)
+	#expect(Formula("exists a p(a)") == existential)
+	#expect(Formula("exists a. p(a)") == existential)
 
 	// Test nested quantified formula
 	let varB = Var(id: 1)
 	let nested = Formula.quantified(.thereExists, varB, quantified)
-	#expect(nested.description == "∃b ∀a P(a)")
-	#expect(Formula("∃b ∀a P(a)") == nested)
-	#expect(Formula("∃b∀a(P(a))") == nested)
+	#expect(nested.description == "∃b ∀a p(a)")
+	#expect(Formula("∃b ∀a p(a)") == nested)
+	#expect(Formula("∃b∀a(p(a))") == nested)
 }
 
 @Test func formulaStringConversionsRoundTrip() async throws {
 	let formulas: [Formula] = [
-		.predicate(name: "Foo", arguments: []),
-		.predicate(name: "Bar", arguments: [.string("test"), .number(3.14)]),
+		.predicate(Predicate(name: "Foo", arguments: [])),
+		.predicate(Predicate(name: "Bar", arguments: [.string("test"), .number(3.14)])),
 		.quantified(
 			.forAll,
 			Var(id: 0),
-			.predicate(name: "P", arguments: [.variable(Var(id: 0))])
+			.predicate(Predicate(name: "P", arguments: [.variable(Var(id: 0))]))
 		),
 		.quantified(
 			.thereExists,
 			Var(id: 1),
 			.predicate(
-				name: "Q",
-				arguments: [.boolean(false), .variable(Var(id: 1))]
-			)
+				Predicate(
+					name: "Q",
+					arguments: [.boolean(false), .variable(Var(id: 1))]
+				))
 		),
 	]
 
@@ -107,9 +109,9 @@ import Testing
 	// become equal after parsing and canonicalization
 
 	// These represent the same logical formula but with different variable names
-	let formula1String = "∀a P(a)"
-	let formula2String = "∀b P(b)"
-	let formula3String = "∀z P(z)"
+	let formula1String = "∀a p(a)"
+	let formula2String = "∀b p(b)"
+	let formula3String = "∀z p(z)"
 
 	// Parse the formulas
 	guard let parsed1 = Formula(formula1String),
@@ -135,9 +137,9 @@ import Testing
 	#expect(canonical1 == canonical3)
 
 	// Test more complex formulas
-	let complex1String = "∀x ∃y P(x, y)"
-	let complex2String = "∀a ∃b P(a, b)"
-	let complex3String = "∀m ∃n P(m, n)"
+	let complex1String = "∀x ∃y p(x, y)"
+	let complex2String = "∀a ∃b p(a, b)"
+	let complex3String = "∀m ∃n p(m, n)"
 
 	guard let complexParsed1 = Formula(complex1String),
 		let complexParsed2 = Formula(complex2String),
