@@ -1,10 +1,5 @@
 public enum Formula: Symbol {
 	case hornClause(positive: Predicate, negative: [Predicate])
-	indirect case quantified(
-		_ quantifier: Quantifier,
-		_ variable: Var,
-		_ body: Formula
-	)
 
 	public static func predicate(_ predicate: Predicate) -> Formula {
 		.hornClause(positive: predicate, negative: [])
@@ -14,7 +9,6 @@ public enum Formula: Symbol {
 		switch self {
 		case .hornClause(positive: let positive, negative: _):
 			.hornClause(positiveName: positive.name)
-		case .quantified(_, _, let body): .quantified(body.type)
 		}
 	}
 
@@ -32,8 +26,6 @@ public enum Formula: Symbol {
 			}
 
 			return "\(negativeStr) -> \(positiveStr)"
-		case .quantified(let quantifier, let v, let body):
-			return "\(quantifier)\(v) \(body)"
 		}
 	}
 
@@ -77,24 +69,6 @@ public enum Formula: Symbol {
 			trimmed = String(trimmed.dropFirst().dropLast())
 		}
 
-		// Try quantified formula: "∀a P(a)" or "∃a P(a)"
-		if let match = trimmed.wholeMatch(
-			of: /^([∀∃]|forall |exists )([a-z])\.?\s*(.+)$/
-		) {
-			guard
-				let quantifier = Quantifier(
-					String(match.1.trimmingCharacters(in: .whitespaces))
-				),
-				let char = match.2.first,
-				let body = Formula(String(match.3))
-			else { return nil }
-
-			let id = UInt8(char.asciiValue! - 97)
-			let variable = Var(id: id)
-			self = .quantified(quantifier, variable, body)
-			return
-		}
-
 		// Try predicate: "Name(args...)"
 		if let match = trimmed.wholeMatch(of: /^(\w+)\(([^)]*)\)$/) {
 			let name = String(match.1)
@@ -131,8 +105,6 @@ extension SymbolVisitor {
 				positive: visit(predicate: positive),
 				negative: negatives.map { visit(predicate: $0) }
 			)
-		case .quantified(let q, let v, let body):
-			.quantified(q, visit(variable: v), visit(formula: body))
 		}
 	}
 
@@ -160,12 +132,6 @@ extension Formula: Codable {
 				negatives.append(try arr.decode(Predicate.self))
 			}
 			self = .hornClause(positive: positive, negative: negatives)
-		case .quantified:
-			self = .quantified(
-				try arr.decode(Quantifier.self),
-				Var(id: try arr.decode(UInt8.self)),
-				try arr.decode(Formula.self)
-			)
 		default:
 			throw DecodingError.dataCorrupted(
 				DecodingError.Context(
@@ -188,10 +154,6 @@ extension Formula: Codable {
 			for negative in negatives {
 				try arr.encode(negative)
 			}
-		case .quantified(let quantifier, let v, let body):
-			try arr.encode(quantifier)
-			try arr.encode(v.id)
-			try arr.encode(body)
 		}
 	}
 }

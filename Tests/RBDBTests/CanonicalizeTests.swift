@@ -7,11 +7,9 @@ import Testing
 	let var1 = Var()
 	let var2 = Var()
 
-	// Create two identical formulas using different Var instances
-	let formula1 = Formula.quantified(
-		.forAll, var1, .predicate(Predicate(name: "Foo", arguments: [.variable(var1)])))
-	let formula2 = Formula.quantified(
-		.forAll, var2, .predicate(Predicate(name: "Foo", arguments: [.variable(var2)])))
+	// Create two identical predicates using different Var instances
+	let formula1 = Formula.predicate(Predicate(name: "Foo", arguments: [.variable(var1)]))
+	let formula2 = Formula.predicate(Predicate(name: "Foo", arguments: [.variable(var2)]))
 
 	// Before canonicalization, formulas should NOT be equal (different Var instances)
 	#expect(formula1 != formula2)

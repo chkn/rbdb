@@ -168,19 +168,20 @@ struct RBDBSchemaTests {
 		#expect(results[0]["count"] as? Int64 == 1, "Should have one rule")
 	}
 
-	@Test("assert(formula:) validates predicates in quantified formulas")
-	func assertValidatesQuantifiedFormulas() async throws {
+	@Test("assert(formula:) validates predicates in horn clauses")
+	func assertValidatesHornClausePredicates() async throws {
 		let rbdb = try RBDB(path: ":memory:")
 
-		// Try to assert a quantified formula with non-existent predicate
+		// Try to assert a horn clause with non-existent predicate
 		let variable = Var()
-		let quantifiedFormula = Formula.quantified(
-			.thereExists, variable,
-			.predicate(Predicate(name: "nonexistent", arguments: [.variable(variable)])))
+		let hornClause = Formula.hornClause(
+			positive: Predicate(name: "nonexistent", arguments: [.variable(variable)]),
+			negative: []
+		)
 
 		// Verify the error message
 		do {
-			try rbdb.assert(formula: quantifiedFormula)
+			try rbdb.assert(formula: hornClause)
 			#expect(Bool(false), "Should have thrown an error")
 		} catch let error as SQLiteError {
 			if case .queryError(let message, _) = error {
