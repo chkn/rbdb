@@ -104,6 +104,50 @@ import Testing
 	#expect(complexCanonical1 == complexCanonical3)
 }
 
+@Test func hornClausesCanonicalizeEquallyRegardlessOfNegativeOrder() async throws {
+	// Test that horn clauses with the same positive and negative predicates
+	// canonicalize equally regardless of the order of negative predicates
+
+	let positive = Predicate(name: "conclusion", arguments: [.string("result")])
+	let negative1 = Predicate(name: "premise1", arguments: [.string("a")])
+	let negative2 = Predicate(name: "premise2", arguments: [.string("b")])
+	let negative3 = Predicate(name: "premise3", arguments: [.string("c")])
+
+	// Create horn clauses with the same predicates but different orders of negatives
+	let hornClause1 = Formula.hornClause(
+		positive: positive,
+		negative: [negative1, negative2, negative3]
+	)
+	let hornClause2 = Formula.hornClause(
+		positive: positive,
+		negative: [negative3, negative1, negative2]  // Different order
+	)
+	let hornClause3 = Formula.hornClause(
+		positive: positive,
+		negative: [negative2, negative3, negative1]  // Another different order
+	)
+
+	// Before canonicalization, they should NOT be equal (different order)
+	#expect(hornClause1 != hornClause2)
+	#expect(hornClause2 != hornClause3)
+	#expect(hornClause1 != hornClause3)
+
+	// After canonicalization, they should be equal (same logical content)
+	let canonical1 = hornClause1.canonicalize()
+	let canonical2 = hornClause2.canonicalize()
+	let canonical3 = hornClause3.canonicalize()
+
+	#expect(
+		canonical1 == canonical2,
+		"Horn clauses with different negative order should canonicalize equally")
+	#expect(
+		canonical2 == canonical3,
+		"Horn clauses with different negative order should canonicalize equally")
+	#expect(
+		canonical1 == canonical3,
+		"Horn clauses with different negative order should canonicalize equally")
+}
+
 @Test func parseHornClausesWithNegatives() async throws {
 	// Test parsing horn clauses with negative literals
 	// These should match the description format: "negatives -> positive"
