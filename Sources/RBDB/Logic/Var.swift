@@ -1,4 +1,4 @@
-public class Var {
+public final class Var: Sendable {
 	let id: UInt8?
 
 	public init(id: UInt8? = nil) {

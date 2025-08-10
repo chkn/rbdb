@@ -103,7 +103,7 @@ extension SymbolVisitor {
 		case .hornClause(positive: let positive, negative: let negatives):
 			.hornClause(
 				positive: visit(predicate: positive),
-				negative: negatives.map { visit(predicate: $0) }
+				negative: negatives.map(visit(predicate:))
 			)
 		}
 	}

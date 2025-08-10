@@ -1,16 +1,7 @@
-class CanonicalizeVisitor: SymbolVisitor {
-	private var varMapping: [ObjectIdentifier: Var] = [:]
+class CanonicalizeVisitor: VariableCollectingVisitor, SymbolVisitor {
 
-	func visit(variable: Var) -> Var {
-		let varId = ObjectIdentifier(variable)
-
-		if let existingVar = varMapping[varId] {
-			return existingVar
-		} else {
-			let newVar = Var(id: UInt8(varMapping.count))
-			varMapping[varId] = newVar
-			return newVar
-		}
+	override func map(variable: Var) -> Var {
+		Var(id: UInt8(variableMapping.count))
 	}
 
 	func visit(formula: Formula) -> Formula {
@@ -25,6 +16,6 @@ class CanonicalizeVisitor: SymbolVisitor {
 
 extension Symbol {
 	public func canonicalize() -> Self {
-		self.accept(visitor: CanonicalizeVisitor())
+		accept(visitor: CanonicalizeVisitor())
 	}
 }

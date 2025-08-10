@@ -74,8 +74,8 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	public func assert(formula: Formula) throws {
-		// Validate that all predicates referenced in the formula exist
-		try validatePredicatesExist(in: formula)
+		// Validate the formula (predicates exist, no unsafe variables, etc.)
+		try validate(formula: formula)
 
 		let jsonStr = try formulaToJSON(formula)
 
@@ -116,6 +116,12 @@ public class RBDB: SQLiteDatabase {
 		}
 
 		throw SQLiteError.queryError("no such table: \(predicateNames.first!)")
+	}
+
+	// FIXME: Make this public?
+	private func validate(formula: Formula) throws {
+		try formula.validate()
+		try validatePredicatesExist(in: formula)
 	}
 
 	private func sqlForInsert(ofFormula expr: String, usingParameters: Bool)
