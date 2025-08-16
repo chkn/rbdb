@@ -11,18 +11,16 @@ struct ParameterizedQueryTests {
 		let db = try SQLiteDatabase(path: ":memory:")
 
 		// Create a test table
-		try db.query("CREATE TABLE test (id INTEGER, name TEXT)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, name TEXT)")
 
 		// Insert with string parameter
 		try db.query(
-			"INSERT INTO test (id, name) VALUES (?, ?)",
-			parameters: [1, "Alice"]
+			sql: "INSERT INTO test (id, name) VALUES (1, 'Alice')"
 		)
 
 		// Query with string parameter
 		let results = try db.query(
-			"SELECT * FROM test WHERE name = ?",
-			parameters: ["Alice"]
+			sql: "SELECT * FROM test WHERE name = 'Alice'"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -37,21 +35,18 @@ struct ParameterizedQueryTests {
 	func integerParameterBinding() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER, value INTEGER)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, value INTEGER)")
 
 		// Test both Int and Int64
 		try db.query(
-			"INSERT INTO test (id, value) VALUES (?, ?)",
-			parameters: [1, 42]
+			sql: "INSERT INTO test (id, value) VALUES (\(1), \(42))"
 		)
 		try db.query(
-			"INSERT INTO test (id, value) VALUES (?, ?)",
-			parameters: [Int64(2), Int64(100)]
+			sql: "INSERT INTO test (id, value) VALUES (\(Int64(2)), \(Int64(100)))"
 		)
 
 		let results = try db.query(
-			"SELECT * FROM test WHERE value > ?",
-			parameters: [50]
+			sql: "SELECT * FROM test WHERE value > \(50)"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -62,20 +57,17 @@ struct ParameterizedQueryTests {
 	func doubleParameterBinding() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER, price REAL)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, price REAL)")
 
 		try db.query(
-			"INSERT INTO test (id, price) VALUES (?, ?)",
-			parameters: [1, 19.99]
+			sql: "INSERT INTO test (id, price) VALUES (\(1), \(19.99))"
 		)
 		try db.query(
-			"INSERT INTO test (id, price) VALUES (?, ?)",
-			parameters: [2, 29.50]
+			sql: "INSERT INTO test (id, price) VALUES (\(2), \(29.50))"
 		)
 
 		let results = try db.query(
-			"SELECT * FROM test WHERE price < ?",
-			parameters: [25.0]
+			sql: "SELECT * FROM test WHERE price < \(25.0)"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -89,17 +81,15 @@ struct ParameterizedQueryTests {
 	func dataParameterBinding() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER, data BLOB)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, data BLOB)")
 
 		let testData = Data([0x01, 0x02, 0x03, 0x04])
 		try db.query(
-			"INSERT INTO test (id, data) VALUES (?, ?)",
-			parameters: [1, testData]
+			sql: "INSERT INTO test (id, data) VALUES (\(1), \(testData))"
 		)
 
 		let results = try db.query(
-			"SELECT * FROM test WHERE id = ?",
-			parameters: [1]
+			sql: "SELECT * FROM test WHERE id = \(1)"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -119,18 +109,16 @@ struct ParameterizedQueryTests {
 
 		let testUUID = UUIDv7()
 
-		try db.query("CREATE TABLE entity (internal_entity_id, entity_id)")
+		try db.query(sql: "CREATE TABLE entity (internal_entity_id, entity_id)")
 
 		// Insert with UUIDv7 parameter
 		try db.query(
-			"INSERT INTO entity (internal_entity_id, entity_id) VALUES (?, ?)",
-			parameters: [1, testUUID]
+			sql: "INSERT INTO entity (internal_entity_id, entity_id) VALUES (\(1), \(testUUID))"
 		)
 
 		// Query with UUIDv7 parameter
 		let results = try db.query(
-			"SELECT * FROM entity WHERE entity_id = ?",
-			parameters: [testUUID]
+			sql: "SELECT * FROM entity WHERE entity_id = \(testUUID)"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -154,15 +142,15 @@ struct ParameterizedQueryTests {
 	func nsNullParameterBinding() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER, optional_text TEXT)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, optional_text TEXT)")
 
 		try db.query(
-			"INSERT INTO test (id, optional_text) VALUES (?, ?)",
-			parameters: [1, NSNull()]
+			sql: SQL(
+				"INSERT INTO test (id, optional_text) VALUES (?, ?)", arguments: [1, NSNull()])
 		)
 
 		let results = try db.query(
-			"SELECT * FROM test WHERE optional_text IS NULL"
+			sql: "SELECT * FROM test WHERE optional_text IS NULL"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -176,15 +164,14 @@ struct ParameterizedQueryTests {
 	func nilParameterBinding() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER, optional_text TEXT)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, optional_text TEXT)")
 
 		try db.query(
-			"INSERT INTO test (id, optional_text) VALUES (?, ?)",
-			parameters: [1, nil]
+			sql: SQL("INSERT INTO test (id, optional_text) VALUES (?, ?)", arguments: [1, nil])
 		)
 
 		let results = try db.query(
-			"SELECT * FROM test WHERE optional_text IS NULL"
+			sql: "SELECT * FROM test WHERE optional_text IS NULL"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -200,34 +187,32 @@ struct ParameterizedQueryTests {
 
 		// Create a more complex table
 		try db.query(
-			"""
-			    CREATE TABLE complex_test (
-			        id INTEGER,
-			        name TEXT,
-			        price REAL,
-			        data BLOB,
-			        uuid_field BLOB,
-			        optional_field TEXT
-			    )
-			"""
+			sql: """
+				    CREATE TABLE complex_test (
+				        id INTEGER,
+				        name TEXT,
+				        price REAL,
+				        data BLOB,
+				        uuid_field BLOB,
+				        optional_field TEXT
+				    )
+				"""
 		)
 
 		let testUUID = UUIDv7()
 		let testData = Data([0xFF, 0xEE, 0xDD])
 
 		try db.query(
-			"""
-			    INSERT INTO complex_test (id, name, price, data, uuid_field, optional_field) 
-			    VALUES (?, ?, ?, ?, ?, ?)
-			""",
-			parameters: [42, "Test Item", 99.99, testData, testUUID, NSNull()]
+			sql: SQL(
+				"""
+				    INSERT INTO complex_test (id, name, price, data, uuid_field, optional_field) 
+				    VALUES (?, ?, ?, ?, ?, ?)
+				""", arguments: [42, "Test Item", 99.99, testData, testUUID, NSNull()])
 		)
 
 		let results = try db.query(
-			"""
-			    SELECT * FROM complex_test WHERE id = ? AND name = ? AND price > ?
-			""",
-			parameters: [42, "Test Item", 50.0]
+			sql:
+				"SELECT * FROM complex_test WHERE id = 42 AND name = 'Test Item' AND price > 50.0"
 		)
 
 		#expect(results.count == 1, "Should return one row")
@@ -256,7 +241,7 @@ struct ParameterizedQueryTests {
 	func unsupportedParameterType() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER)")
 
 		// Try to bind an unsupported type (e.g., a custom struct)
 		struct UnsupportedType {}
@@ -264,8 +249,7 @@ struct ParameterizedQueryTests {
 
 		#expect(throws: SQLiteError.self) {
 			try db.query(
-				"INSERT INTO test (id) VALUES (?)",
-				parameters: [unsupported]
+				sql: SQL("INSERT INTO test (id) VALUES (?)", arguments: [unsupported])
 			)
 		}
 	}
@@ -274,13 +258,12 @@ struct ParameterizedQueryTests {
 	func parameterCountMismatch() async throws {
 		let db = try SQLiteDatabase(path: ":memory:")
 
-		try db.query("CREATE TABLE test (id INTEGER, name TEXT)")
+		try db.query(sql: "CREATE TABLE test (id INTEGER, name TEXT)")
 
 		// Provide fewer parameters than placeholders
 		#expect(throws: SQLiteError.self) {
 			try db.query(
-				"INSERT INTO test (id, name) VALUES (?, ?)",
-				parameters: [1]
+				sql: SQL("INSERT INTO test (id, name) VALUES (?, ?)", arguments: [1])
 			)
 		}
 	}

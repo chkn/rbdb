@@ -11,7 +11,7 @@ struct RBDBSchemaTests {
 
 		// Query for existing tables
 		let results = try rbdb.query(
-			"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+			sql: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
 		)
 
 		let tableNames = results.compactMap { $0["name"] as? String }
@@ -32,11 +32,11 @@ struct RBDBSchemaTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Insert a row into entity table (should use default uuidv7())
-		try rbdb.query("INSERT INTO _entity (internal_entity_id) VALUES (1)")
+		try rbdb.query(sql: "INSERT INTO _entity (internal_entity_id) VALUES (1)")
 
 		// Query the inserted row
 		let results = try rbdb.query(
-			"SELECT entity_id FROM _entity WHERE internal_entity_id = 1"
+			sql: "SELECT entity_id FROM _entity WHERE internal_entity_id = 1"
 		)
 
 		#expect(results.count == 1, "Should have inserted one row")
@@ -55,8 +55,8 @@ struct RBDBSchemaTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Create predicate tables first
-		try rbdb.query("CREATE TABLE parent(parent, child)")
-		try rbdb.query("CREATE TABLE likes(who, what)")
+		try rbdb.query(sql: "CREATE TABLE parent(parent, child)")
+		try rbdb.query(sql: "CREATE TABLE likes(who, what)")
 
 		// Insert test rules with constant arguments
 		try rbdb.assert(
@@ -68,11 +68,11 @@ struct RBDBSchemaTests {
 
 		// Query the generated columns
 		let results = try rbdb.query(
-			"""
-				SELECT arg1_constant, arg2_constant, output_type 
-				FROM _rule 
-				ORDER BY output_type
-			""")
+			sql: """
+					SELECT arg1_constant, arg2_constant, output_type 
+					FROM _rule 
+					ORDER BY output_type
+				""")
 
 		#expect(results.count == 2, "Should have two rules")
 
@@ -91,8 +91,8 @@ struct RBDBSchemaTests {
 	func queriesUseIndexes() async throws {
 		let rbdb = try RBDB(path: ":memory:")
 
-		try rbdb.query("CREATE TABLE parent(parent, child)")
-		try rbdb.query("CREATE TABLE likes(who, what)")
+		try rbdb.query(sql: "CREATE TABLE parent(parent, child)")
+		try rbdb.query(sql: "CREATE TABLE likes(who, what)")
 
 		// Insert test data
 		try rbdb.assert(
@@ -107,11 +107,11 @@ struct RBDBSchemaTests {
 
 		// Query using arg1_constant and check query plan
 		let queryPlan1 = try rbdb.query(
-			"""
-				EXPLAIN QUERY PLAN 
-				SELECT * FROM parent 
-				WHERE parent = 'alice'
-			""")
+			sql: """
+					EXPLAIN QUERY PLAN 
+					SELECT * FROM parent 
+					WHERE parent = 'alice'
+				""")
 
 		// Verify that an index is being used and mentions arg1_constant
 		let planText1 = queryPlan1.compactMap { $0["detail"] as? String }.joined(separator: " ")
@@ -120,11 +120,11 @@ struct RBDBSchemaTests {
 
 		// Query using arg2_constant and check query plan
 		let queryPlan2 = try rbdb.query(
-			"""
-				EXPLAIN QUERY PLAN 
-				SELECT * FROM parent 
-				WHERE child = 'bob'
-			""")
+			sql: """
+					EXPLAIN QUERY PLAN 
+					SELECT * FROM parent 
+					WHERE child = 'bob'
+				""")
 
 		// Verify that an index is being used and mentions arg2_constant
 		let planText2 = queryPlan2.compactMap { $0["detail"] as? String }.joined(separator: " ")
@@ -156,7 +156,7 @@ struct RBDBSchemaTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Create a predicate table first
-		try rbdb.query("CREATE TABLE parent(parent, child)")
+		try rbdb.query(sql: "CREATE TABLE parent(parent, child)")
 
 		// Now assert should work
 		try rbdb.assert(
@@ -164,7 +164,7 @@ struct RBDBSchemaTests {
 				Predicate(name: "parent", arguments: [.string("alice"), .string("bob")])))
 
 		// Verify the rule was inserted
-		let results = try rbdb.query("SELECT COUNT(*) as count FROM _rule")
+		let results = try rbdb.query(sql: "SELECT COUNT(*) as count FROM _rule")
 		#expect(results[0]["count"] as? Int64 == 1, "Should have one rule")
 	}
 

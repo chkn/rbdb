@@ -9,7 +9,7 @@ struct RBDBAssertTests {
 	func assertFormulaStoresRule() async throws {
 		let rbdb = try RBDB(path: ":memory:")
 
-		try rbdb.query("CREATE TABLE user(name)")
+		try rbdb.query(sql: "CREATE TABLE user(name)")
 
 		// Create a simple predicate formula: user("Alice")
 		let formula = Formula.predicate(
@@ -20,7 +20,7 @@ struct RBDBAssertTests {
 
 		try rbdb.assert(formula: formula)
 
-		let ruleResults = try rbdb.query("SELECT name FROM user")
+		let ruleResults = try rbdb.query(sql: "SELECT name FROM user")
 		#expect(
 			ruleResults.count == 1,
 			"Should have one record stored in user table"
@@ -33,15 +33,14 @@ struct RBDBAssertTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Create a table with one column
-		try rbdb.query("CREATE TABLE user(name)")
+		try rbdb.query(sql: "CREATE TABLE user(name)")
 
 		// Insert a row into the table
 		try rbdb.query(
-			"INSERT INTO user(name) VALUES (?)",
-			parameters: ["Alice"]
+			sql: SQL("INSERT INTO user(name) VALUES (?)", arguments: ["Alice"])
 		)
 
-		let ruleResults = try rbdb.query("SELECT name FROM user")
+		let ruleResults = try rbdb.query(sql: "SELECT name FROM user")
 		#expect(
 			ruleResults.count == 1,
 			"Should have one record stored in user table"

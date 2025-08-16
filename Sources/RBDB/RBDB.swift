@@ -36,38 +36,23 @@ public class RBDB: SQLiteDatabase {
 
 		// Migrate the schema
 		try super.query(
-			String(decoding: PackageResources.schema_sql, as: UTF8.self)
+			sql: SQL(String(decoding: PackageResources.schema_sql, as: UTF8.self))
 		)
 	}
 
 	@discardableResult
-	public override func query(_ sql: String, startOffset: Int = 0) throws
-		-> [[String: Any?]]
-	{
+	public override func query(sql: SQL) throws -> [[String: Any?]] {
 		do {
-			return try super.query(sql, startOffset: startOffset)
+			return try super.query(sql: sql)
 		} catch let error as SQLiteError {
-			// Only attempt to rescue if we have an offset to resume from, so
+			// Only attempt to rescue if we have an index to resume from, so
 			//  we don't risk re-executing any potentially non-idempotent commands.
-			if case .queryError(_, let offset) = error, let offset = offset,
+			if case .queryError(_, let index) = error, let index = index,
 				try rescue(error: error)
 			{
-				return try super.query(sql, startOffset: offset)
-			}
-			throw error
-		}
-	}
-
-	@discardableResult
-	public override func query(_ sql: String, parameters: [Any?]) throws
-		-> [[String: Any?]]
-	{
-		do {
-			return try super.query(sql, parameters: parameters)
-		} catch let error as SQLiteError {
-			if try rescue(error: error) {
-				// Now try the original query again
-				return try super.query(sql, parameters: parameters)
+				// Don't do `super.query` here because we want to continue rescuing
+				//  the remainder of the query..
+				return try query(sql: sql.at(startIndex: index))
 			}
 			throw error
 		}
@@ -79,20 +64,16 @@ public class RBDB: SQLiteDatabase {
 
 		let jsonStr = try formulaToJSON(formula)
 
-		try super.query("BEGIN TRANSACTION")
+		try super.query(sql: "BEGIN TRANSACTION")
 		do {
-			for (sql, parameters) in sqlForInsert(
-				ofFormula: jsonStr,
-				usingParameters: true
-			) {
-				try super.query(
-					sql,
-					parameters: parameters
-				)
-			}
-			try super.query("COMMIT")
+			try super.query(
+				sql: sqlForInsert(
+					ofFormula: jsonStr,
+					usingParameters: true
+				))
+			try super.query(sql: "COMMIT")
 		} catch {
-			try super.query("ROLLBACK")
+			try super.query(sql: "ROLLBACK")
 			throw error
 		}
 	}
@@ -104,8 +85,9 @@ public class RBDB: SQLiteDatabase {
 		let placeholders = Array(repeating: "?", count: predicateNames.count).joined(
 			separator: ", ")
 		let results = try super.query(
-			"SELECT name FROM _predicate WHERE name IN (\(placeholders))",
-			parameters: Array(predicateNames)
+			sql: SQL(
+				"SELECT name FROM _predicate WHERE name IN (\(placeholders))",
+				arguments: Array(predicateNames))
 		)
 		guard results.count != predicateNames.count else { return }
 
@@ -124,25 +106,13 @@ public class RBDB: SQLiteDatabase {
 		try validatePredicatesExist(in: formula)
 	}
 
-	private func sqlForInsert(ofFormula expr: String, usingParameters: Bool)
-		-> [(
-			String, parameters: [Any?]
-		)]
-	{
-		[
-			(
-				// Can't use DEFAULT VALUES in a trigger context
-				"INSERT INTO _entity (internal_entity_id) VALUES (NULL)",
-				parameters: []
-			),
-			(
-				"""
-				INSERT INTO _rule (internal_entity_id, formula)
-				VALUES (last_insert_rowid(), jsonb(\(usingParameters ? "?" : expr)))
-				""",
-				parameters: usingParameters ? [expr] : []
-			),
-		]
+	private func sqlForInsert(ofFormula expr: String, usingParameters: Bool) -> SQL {
+		SQL(
+			"""
+			INSERT INTO _entity (internal_entity_id) VALUES (NULL);
+			INSERT INTO _rule (internal_entity_id, formula)
+			VALUES (last_insert_rowid(), jsonb(\(usingParameters ? expr : SQL(expr))))
+			""")
 	}
 
 	override func readRows(in statement: OpaquePointer) throws -> [[String:
@@ -180,24 +150,22 @@ public class RBDB: SQLiteDatabase {
 			encoding: .utf8
 		)!
 
-		try super.query("BEGIN TRANSACTION")
+		try super.query(sql: "BEGIN TRANSACTION")
 		do {
-			try super.query("INSERT INTO _entity DEFAULT VALUES")
+			try super.query(sql: "INSERT INTO _entity DEFAULT VALUES")
 
 			// Insert into predicate table using the last inserted entity ID and jsonb function
 			// Use INSERT OR IGNORE if IF NOT EXISTS was specified
-			let orIgnore = createTable.ifNotExists ? "OR IGNORE " : ""
-			try super.query(
-				"""
+			let orIgnore = SQL(createTable.ifNotExists ? "OR IGNORE " : "")
+			let insertSQL: SQL = """
 					INSERT \(orIgnore)INTO _predicate (internal_entity_id, name, column_names)
-					VALUES (last_insert_rowid(), ?, jsonb(?))
-				""",
-				parameters: [createTable.tableName, columnNamesJson]
-			)
+					VALUES (last_insert_rowid(), \(createTable.tableName), jsonb(\(columnNamesJson)))
+				"""
+			try super.query(sql: insertSQL)
 
-			try super.query("COMMIT")
+			try super.query(sql: "COMMIT")
 		} catch {
-			try super.query("ROLLBACK")
+			try super.query(sql: "ROLLBACK")
 			throw error
 		}
 
@@ -229,7 +197,7 @@ public class RBDB: SQLiteDatabase {
 			CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS
 			SELECT \(selectList.joined(separator: ", ")) FROM _rule WHERE output_type = '@\(tableName)'
 			"""
-		try super.query(createViewSQL)
+		try super.query(sql: SQL(createViewSQL))
 
 		// Create INSTEAD OF INSERT trigger
 		let predicateFormulaCall =
@@ -237,22 +205,16 @@ public class RBDB: SQLiteDatabase {
 			+ columns.map { "NEW.[\($0)]" }.joined(separator: ", ")
 			+ ")"
 
-		let insertStatements = sqlForInsert(
-			ofFormula: predicateFormulaCall,
-			usingParameters: false
-		)
-		let triggerBody = insertStatements.map { $0.0 }.joined(separator: ";")
-
-		let createTriggerSQL =
+		let createTrigger =
 			"""
 			CREATE TEMP TRIGGER IF NOT EXISTS \(tableName)_insert_trigger
 			INSTEAD OF INSERT ON \(tableName)
 			FOR EACH ROW
 			BEGIN
-				\(triggerBody);
+			\(sqlForInsert(ofFormula: predicateFormulaCall, usingParameters: false).queryText);
 			END
 			"""
-		try super.query(createTriggerSQL)
+		try super.query(sql: SQL(createTrigger))
 	}
 
 	private func rescue(error: SQLiteError) throws -> Bool {
@@ -260,8 +222,8 @@ public class RBDB: SQLiteDatabase {
 			let match = msg.firstMatch(of: /no such table: ([^\s]+)/)
 		{
 			let predicateResult = try super.query(
-				"SELECT json(column_names) as json_array FROM _predicate WHERE name = ?",
-				parameters: [match.1]
+				sql:
+					"SELECT json(column_names) as json_array FROM _predicate WHERE name = \(match.1)"
 			)
 			guard predicateResult.count == 1 else { return false }
 

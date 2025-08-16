@@ -11,12 +11,12 @@ struct CreateTableInterceptionTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Execute a CREATE TABLE statement
-		try rbdb.query("CREATE TABLE users (id INTEGER, name TEXT, email TEXT)")
+		try rbdb.query(sql: "CREATE TABLE users (id INTEGER, name TEXT, email TEXT)")
 
 		// Check that the predicate was recorded
 		let results = try rbdb.query(
-			"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = ?",
-			parameters: ["users"]
+			sql:
+				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'users'"
 		)
 
 		#expect(results.count == 1, "Should have one predicate record")
@@ -46,13 +46,14 @@ struct CreateTableInterceptionTests {
 
 		// Execute a CREATE TABLE IF NOT EXISTS statement
 		try rbdb.query(
-			"CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price REAL)"
+			sql:
+				"CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price REAL)"
 		)
 
 		// Check that the predicate was recorded
 		let results = try rbdb.query(
-			"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = ?",
-			parameters: ["products"]
+			sql:
+				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'products'"
 		)
 
 		#expect(results.count == 1, "Should have one predicate record")
@@ -82,22 +83,22 @@ struct CreateTableInterceptionTests {
 
 		// Execute a CREATE TABLE with various column types and constraints
 		try rbdb.query(
-			"""
-			    CREATE TABLE complex_table (
-			        id INTEGER PRIMARY KEY AUTOINCREMENT,
-			        name VARCHAR(255) NOT NULL,
-			        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			        price DECIMAL(10,2),
-			        data BLOB,
-			        UNIQUE(name)
-			    )
-			"""
+			sql: """
+				    CREATE TABLE complex_table (
+				        id INTEGER PRIMARY KEY AUTOINCREMENT,
+				        name VARCHAR(255) NOT NULL,
+				        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				        price DECIMAL(10,2),
+				        data BLOB,
+				        UNIQUE(name)
+				    )
+				"""
 		)
 
 		// Check that the predicate was recorded
 		let results = try rbdb.query(
-			"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = ?",
-			parameters: ["complex_table"]
+			sql:
+				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'complex_table'"
 		)
 
 		#expect(results.count == 1, "Should have one predicate record")
@@ -128,12 +129,12 @@ struct CreateTableInterceptionTests {
 		// Execute a CREATE TABLE with quoted column names should throw an error
 		#expect(throws: SQLiteError.self) {
 			try rbdb.query(
-				"""
-				    CREATE TABLE quoted_table (
-				        "user id" INTEGER,
-				        name TEXT
-				    )
-				"""
+				sql: """
+					    CREATE TABLE quoted_table (
+					        "user id" INTEGER,
+					        name TEXT
+					    )
+					"""
 			)
 		}
 	}
@@ -144,16 +145,16 @@ struct CreateTableInterceptionTests {
 
 		// Execute multiple CREATE TABLE statements
 		try rbdb.query(
-			"""
-			    CREATE TABLE table1 (id INTEGER, name TEXT);
-			    CREATE TABLE table2 (id INTEGER, value REAL);
-			    CREATE TABLE table3 (id INTEGER, data BLOB);
-			"""
+			sql: """
+				    CREATE TABLE table1 (id INTEGER, name TEXT);
+				    CREATE TABLE table2 (id INTEGER, value REAL);
+				    CREATE TABLE table3 (id INTEGER, data BLOB);
+				"""
 		)
 
 		// Check that all predicates were recorded
 		let results = try rbdb.query(
-			"SELECT name FROM _predicate ORDER BY name"
+			sql: "SELECT name FROM _predicate ORDER BY name"
 		)
 
 		#expect(results.count == 3, "Should have three predicate records")
@@ -170,12 +171,12 @@ struct CreateTableInterceptionTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Execute a CREATE TABLE with a table name that might need quoting
-		try rbdb.query("CREATE TABLE \"user-data\" (id INTEGER, info TEXT)")
+		try rbdb.query(sql: "CREATE TABLE \"user-data\" (id INTEGER, info TEXT)")
 
 		// Check that the predicate was recorded
 		let results = try rbdb.query(
-			"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = ?",
-			parameters: ["user-data"]
+			sql:
+				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'user-data'"
 		)
 
 		#expect(results.count == 1, "Should have one predicate record")
@@ -203,7 +204,7 @@ struct CreateTableInterceptionTests {
 
 		// Execute a malformed CREATE TABLE statement should throw an error
 		#expect(throws: SQLiteError.self) {
-			try rbdb.query("CREATE TABLE malformed_table")
+			try rbdb.query(sql: "CREATE TABLE malformed_table")
 		}
 	}
 
@@ -212,12 +213,12 @@ struct CreateTableInterceptionTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// Execute a CREATE TABLE with column names but no explicit types
-		try rbdb.query("CREATE TABLE simple_table (id, name, value)")
+		try rbdb.query(sql: "CREATE TABLE simple_table (id, name, value)")
 
 		// Check that the predicate was recorded
 		let results = try rbdb.query(
-			"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = ?",
-			parameters: ["simple_table"]
+			sql:
+				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'simple_table'"
 		)
 
 		#expect(results.count == 1, "Should have one predicate record")
@@ -246,12 +247,11 @@ struct CreateTableInterceptionTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// First create the table
-		try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+		try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 
 		// Verify it was created
 		let initialResults = try rbdb.query(
-			"SELECT name FROM _predicate WHERE name = ?",
-			parameters: ["test_table"]
+			sql: "SELECT name FROM _predicate WHERE name = 'test_table'"
 		)
 		#expect(
 			initialResults.count == 1,
@@ -260,13 +260,12 @@ struct CreateTableInterceptionTests {
 
 		// Try to create the same table again with IF NOT EXISTS - should not throw
 		try rbdb.query(
-			"CREATE TABLE IF NOT EXISTS test_table (id INTEGER, name TEXT, extra_col TEXT)"
+			sql: "CREATE TABLE IF NOT EXISTS test_table (id INTEGER, name TEXT, extra_col TEXT)"
 		)
 
 		// Verify we still have only one record (the original one)
 		let finalResults = try rbdb.query(
-			"SELECT name FROM _predicate WHERE name = ?",
-			parameters: ["test_table"]
+			sql: "SELECT name FROM _predicate WHERE name = 'test_table'"
 		)
 		#expect(
 			finalResults.count == 1,
@@ -279,11 +278,11 @@ struct CreateTableInterceptionTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// First create the table
-		try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+		try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 
 		// Try to create the same table again without IF NOT EXISTS - should throw
 		#expect(throws: SQLiteError.self) {
-			try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+			try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 		}
 	}
 
@@ -292,22 +291,22 @@ struct CreateTableInterceptionTests {
 		let rbdb = try RBDB(path: ":memory:")
 
 		// First create the table
-		try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+		try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 
 		// Count entities before failed attempt
 		let entitiesBeforeResults = try rbdb.query(
-			"SELECT COUNT(*) as count FROM _entity"
+			sql: "SELECT COUNT(*) as count FROM _entity"
 		)
 		let entitiesBefore = entitiesBeforeResults[0]["count"] as! Int64
 
 		// Try to create the same table again without IF NOT EXISTS - should throw
 		#expect(throws: SQLiteError.self) {
-			try rbdb.query("CREATE TABLE test_table (id INTEGER, name TEXT)")
+			try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 		}
 
 		// Count entities after failed attempt - should be the same
 		let entitiesAfterResults = try rbdb.query(
-			"SELECT COUNT(*) as count FROM _entity"
+			sql: "SELECT COUNT(*) as count FROM _entity"
 		)
 		let entitiesAfter = entitiesAfterResults[0]["count"] as! Int64
 

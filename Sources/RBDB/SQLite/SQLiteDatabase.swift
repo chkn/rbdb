@@ -6,8 +6,8 @@ public enum SQLiteError: Error {
 	case couldNotRegisterFunction(name: String)
 	case queryParameterCount(expected: Int, got: Int)
 
-	/// Error running a query. Gives a byte offset in the query of the failing statement, if possible.
-	case queryError(String, offset: Int? = nil)
+	/// Error running a query. Gives an index in the SQL of the failing statement, if possible.
+	case queryError(String, index: SQL.Index? = nil)
 }
 
 public class SQLiteDatabase {
@@ -46,32 +46,29 @@ public class SQLiteDatabase {
 		sqlite3_close(db)
 	}
 
-	/// Runs one or more SQL statements, returning the result set from the last one.
-	///  If specified, `startOffset` indicates a byte offset within `sql` from which
-	///    to start executing.
+	/// Runs SQL statements, returning the result set from the last one.
 	@discardableResult
-	public func query(_ sql: String, startOffset: Int = 0) throws -> [[String:
-		Any?]]
-	{
-		return try sql.withCString { sqlCString in
+	public func query(sql: SQL) throws -> [[String: Any?]] {
+		return try sql.queryText.withCString { sqlCString in
 			var finalResults: [[String: Any?]] = []
-			let startPointer = sqlCString.advanced(by: startOffset)
-			var remainingSQL: UnsafePointer<CChar>? = startPointer
+			var remainingSQL: UnsafePointer<CChar>? = sqlCString.advanced(
+				by: sql.startIndex.queryOffset)
+
+			let argumentCount = sql.arguments.count
+			var argumentIndex = sql.startIndex.argumentIndex
 
 			while let currentSQL = remainingSQL, currentSQL.pointee != 0 {
 				var statement: OpaquePointer?
-				var nextSQL: UnsafePointer<CChar>?
 
 				guard
-					sqlite3_prepare_v2(db, currentSQL, -1, &statement, &nextSQL)
+					sqlite3_prepare_v2(db, currentSQL, -1, &statement, &remainingSQL)
 						== SQLITE_OK
 				else {
 					let errmsg = String(cString: sqlite3_errmsg(db))
 					let failedOffset = currentSQL - sqlCString
-					throw SQLiteError.queryError(
-						errmsg,
-						offset: Int(failedOffset)
-					)
+					let failedIndex = SQL.Index(
+						queryOffset: Int(failedOffset), argumentIndex: argumentIndex)
+					throw SQLiteError.queryError(errmsg, index: failedIndex)
 				}
 				defer {
 					sqlite3_finalize(statement)
@@ -80,169 +77,150 @@ public class SQLiteDatabase {
 				// statement will be nil here (but sqlite3_prepare_v2 succeeded) if currentSQL is whitespace
 				if let statement = statement {
 					do {
+						let expectedParams = Int(sqlite3_bind_parameter_count(statement))
+						let availableParams = sql.arguments.count - argumentIndex
+						if availableParams < expectedParams {
+							argumentIndex += expectedParams
+							continue
+						}
+
+						// Bind parameters for this statement
+						for i in 0..<expectedParams {
+							let parameterIndex = argumentIndex + i
+							let parameter = sql.arguments[parameterIndex]
+							let paramIndex = Int32(i + 1)  // SQLite parameters are 1-indexed
+
+							switch parameter {
+							case let stringValue as any StringProtocol:
+								guard
+									stringValue.withCString({ bindCStr in
+										sqlite3_bind_text(
+											statement,
+											paramIndex,
+											bindCStr,
+											-1,
+											unsafeBitCast(
+												-1,
+												to: sqlite3_destructor_type.self
+											)  // SQLITE_TRANSIENT
+										)
+									}) == SQLITE_OK
+								else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind string parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							case let intValue as Int:
+								guard
+									sqlite3_bind_int64(
+										statement,
+										paramIndex,
+										Int64(intValue)
+									) == SQLITE_OK
+								else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind int parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							case let int64Value as Int64:
+								guard
+									sqlite3_bind_int64(statement, paramIndex, int64Value)
+										== SQLITE_OK
+								else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind int64 parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							case let doubleValue as Double:
+								guard
+									sqlite3_bind_double(statement, paramIndex, doubleValue)
+										== SQLITE_OK
+								else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind double parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							case let dataValue as Data:
+								let result = dataValue.withUnsafeBytes { bytes in
+									sqlite3_bind_blob(
+										statement,
+										paramIndex,
+										bytes.baseAddress,
+										Int32(dataValue.count),
+										unsafeBitCast(-1, to: sqlite3_destructor_type.self)  // SQLITE_TRANSIENT
+									)
+								}
+								guard result == SQLITE_OK else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind data parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							case let uuidValue as UUIDv7:
+								let result = uuidValue.withUnsafeBytes { bytes in
+									sqlite3_bind_blob(
+										statement,
+										paramIndex,
+										bytes.baseAddress,
+										Int32(bytes.count),
+										unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+									)
+								}
+								guard result == SQLITE_OK else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind UUIDv7 parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							case nil, is NSNull:
+								guard sqlite3_bind_null(statement, paramIndex) == SQLITE_OK
+								else {
+									let errmsg = String(cString: sqlite3_errmsg(db))
+									throw SQLiteError.queryError(
+										"Failed to bind null parameter at index \(parameterIndex): \(errmsg)"
+									)
+								}
+							default:
+								throw SQLiteError.queryError(
+									"Unsupported parameter type at index \(parameterIndex): \(type(of: parameter))"
+								)
+							}
+						}
+
 						let statementResults = try readRows(in: statement)
 
 						// Keep results from the last statement that produced results
 						if !statementResults.isEmpty {
 							finalResults = statementResults
 						}
+
+						// Advance argument index by the number of parameters consumed.
+						//  Do this last to have the right `failedIndex` for retrying if
+						//  `readRows` fails above.
+						argumentIndex += expectedParams
 					} catch {
 						let failedOffset = currentSQL - sqlCString
-						if case .queryError(let message, _) = error
-							as? SQLiteError
-						{
-							throw SQLiteError.queryError(
-								message,
-								offset: Int(failedOffset)
-							)
+						if case .queryError(let message, _) = error as? SQLiteError {
+							let failedIndex = SQL.Index(
+								queryOffset: Int(failedOffset), argumentIndex: argumentIndex)
+							throw SQLiteError.queryError(message, index: failedIndex)
 						}
 
 						throw error
 					}
 				}
-
-				// Move to the next statement
-				remainingSQL = nextSQL
 			}
-			return finalResults
-		}
-	}
-
-	/// Runs a single parameterized SQL statement.
-	@discardableResult
-	public func query(_ sql: String, parameters: [Any?]) throws -> [[String:
-		Any?]]
-	{
-		return try sql.withCString { sqlCString in
-			var statement: OpaquePointer?
-
-			guard
-				sqlite3_prepare_v2(db, sqlCString, -1, &statement, nil)
-					== SQLITE_OK
-			else {
-				let errmsg = String(cString: sqlite3_errmsg(db))
-				throw SQLiteError.queryError(errmsg)
-			}
-			defer {
-				sqlite3_finalize(statement)
-			}
-			guard let statement = statement else { return [] }
-
-			// Check parameter count
-			let expectedParams = Int(sqlite3_bind_parameter_count(statement))
-			guard parameters.count == expectedParams else {
+			if argumentIndex != argumentCount {
 				throw SQLiteError.queryParameterCount(
-					expected: expectedParams,
-					got: parameters.count
+					expected: argumentIndex,
+					got: argumentCount
 				)
 			}
-
-			// Bind parameters
-			for (index, parameter) in parameters.enumerated() {
-				let paramIndex = Int32(index + 1)  // SQLite parameters are 1-indexed
-
-				switch parameter {
-				case let stringValue as any StringProtocol:
-					guard
-						stringValue.withCString({ bindCStr in
-							sqlite3_bind_text(
-								statement,
-								paramIndex,
-								bindCStr,
-								-1,
-								unsafeBitCast(
-									-1,
-									to: sqlite3_destructor_type.self
-								)  // SQLITE_TRANSIENT
-							)
-						}) == SQLITE_OK
-					else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind string parameter at index \(index): \(errmsg)"
-						)
-					}
-				case let intValue as Int:
-					guard
-						sqlite3_bind_int64(
-							statement,
-							paramIndex,
-							Int64(intValue)
-						) == SQLITE_OK
-					else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind int parameter at index \(index): \(errmsg)"
-						)
-					}
-				case let int64Value as Int64:
-					guard
-						sqlite3_bind_int64(statement, paramIndex, int64Value)
-							== SQLITE_OK
-					else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind int64 parameter at index \(index): \(errmsg)"
-						)
-					}
-				case let doubleValue as Double:
-					guard
-						sqlite3_bind_double(statement, paramIndex, doubleValue)
-							== SQLITE_OK
-					else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind double parameter at index \(index): \(errmsg)"
-						)
-					}
-				case let dataValue as Data:
-					let result = dataValue.withUnsafeBytes { bytes in
-						sqlite3_bind_blob(
-							statement,
-							paramIndex,
-							bytes.baseAddress,
-							Int32(dataValue.count),
-							unsafeBitCast(-1, to: sqlite3_destructor_type.self)  // SQLITE_TRANSIENT
-						)
-					}
-					guard result == SQLITE_OK else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind data parameter at index \(index): \(errmsg)"
-						)
-					}
-				case let uuidValue as UUIDv7:
-					let result = uuidValue.withUnsafeBytes { bytes in
-						sqlite3_bind_blob(
-							statement,
-							paramIndex,
-							bytes.baseAddress,
-							Int32(bytes.count),
-							unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-						)
-					}
-					guard result == SQLITE_OK else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind UUIDv7 parameter at index \(index): \(errmsg)"
-						)
-					}
-				case nil, is NSNull:
-					guard sqlite3_bind_null(statement, paramIndex) == SQLITE_OK
-					else {
-						let errmsg = String(cString: sqlite3_errmsg(db))
-						throw SQLiteError.queryError(
-							"Failed to bind null parameter at index \(index): \(errmsg)"
-						)
-					}
-				default:
-					throw SQLiteError.queryError(
-						"Unsupported parameter type at index \(index): \(type(of: parameter))"
-					)
-				}
-			}
-
-			return try readRows(in: statement)
+			return finalResults
 		}
 	}
 

@@ -34,7 +34,8 @@ func printUsage() {
 func displaySchema(database: SQLiteDatabase) {
 	do {
 		let results = try database.query(
-			"SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name"
+			sql:
+				"SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name"
 		)
 
 		if results.isEmpty {
@@ -72,7 +73,7 @@ func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
 		print("Executing commands from file: \(filePath)")
 
 		do {
-			let results = try database.query(content)
+			let results = try database.query(sql: SQL(content))
 			if !results.isEmpty {
 				print(formatTable(results))
 			} else {
@@ -468,7 +469,7 @@ func runNonInteractiveMode(database: RBDB) {
 
 func executeCommand(_ command: String, database: RBDB) {
 	do {
-		let results = try database.query(command)
+		let results = try database.query(sql: SQL(command))
 		print(formatTable(results))
 	} catch {
 		print("Error: \(error)")

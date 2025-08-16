@@ -7,8 +7,8 @@ func rejectVariableOnlyInHead() async throws {
 	let rbdb = try RBDB(path: ":memory:")
 
 	// Create tables
-	try rbdb.query("CREATE TABLE human(name TEXT)")
-	try rbdb.query("CREATE TABLE mortal(name TEXT, age INT)")
+	try rbdb.query(sql: "CREATE TABLE human(name TEXT)")
+	try rbdb.query(sql: "CREATE TABLE mortal(name TEXT, age INT)")
 
 	// Unsafe rule: human(X) -> mortal(X, Y)
 	// Y appears only in head, not in body - this is unsafe!
@@ -31,8 +31,8 @@ func acceptAllVariablesSafe() async throws {
 	let rbdb = try RBDB(path: ":memory:")
 
 	// Create tables
-	try rbdb.query("CREATE TABLE human(name TEXT)")
-	try rbdb.query("CREATE TABLE mortal(name TEXT)")
+	try rbdb.query(sql: "CREATE TABLE human(name TEXT)")
+	try rbdb.query(sql: "CREATE TABLE mortal(name TEXT)")
 
 	// Safe rule: human(X) -> mortal(X)
 	// X appears in both head and body - this is safe
@@ -52,8 +52,8 @@ func rejectMultipleUnsafeVariables() async throws {
 	let rbdb = try RBDB(path: ":memory:")
 
 	// Create tables
-	try rbdb.query("CREATE TABLE person(name TEXT)")
-	try rbdb.query("CREATE TABLE relationship(person1 TEXT, person2 TEXT, type TEXT)")
+	try rbdb.query(sql: "CREATE TABLE person(name TEXT)")
+	try rbdb.query(sql: "CREATE TABLE relationship(person1 TEXT, person2 TEXT, type TEXT)")
 
 	// Unsafe rule: person(X) -> relationship(X, Y, Z)
 	// Y and Z appear only in head - both unsafe!
@@ -78,9 +78,9 @@ func acceptVariablesInMultipleBodyPredicates() async throws {
 	let rbdb = try RBDB(path: ":memory:")
 
 	// Create tables
-	try rbdb.query("CREATE TABLE parent(parent TEXT, child TEXT)")
-	try rbdb.query("CREATE TABLE person(name TEXT)")
-	try rbdb.query("CREATE TABLE grandparent(grandparent TEXT, grandchild TEXT)")
+	try rbdb.query(sql: "CREATE TABLE parent(parent TEXT, child TEXT)")
+	try rbdb.query(sql: "CREATE TABLE person(name TEXT)")
+	try rbdb.query(sql: "CREATE TABLE grandparent(grandparent TEXT, grandchild TEXT)")
 
 	// Safe rule: parent(X, Y) ∧ parent(Y, Z) -> grandparent(X, Z)
 	// All variables X, Y, Z appear in the body predicates
@@ -105,8 +105,8 @@ func acceptConstantsAndSafeVariables() async throws {
 	let rbdb = try RBDB(path: ":memory:")
 
 	// Create tables
-	try rbdb.query("CREATE TABLE student(name TEXT, major TEXT)")
-	try rbdb.query("CREATE TABLE honor_student(name TEXT)")
+	try rbdb.query(sql: "CREATE TABLE student(name TEXT, major TEXT)")
+	try rbdb.query(sql: "CREATE TABLE honor_student(name TEXT)")
 
 	// Safe rule: student(X, "Computer Science") -> honor_student(X)
 	// X appears in both head and body, constant "Computer Science" is always safe
@@ -128,8 +128,8 @@ func acceptAllConstants() async throws {
 	let rbdb = try RBDB(path: ":memory:")
 
 	// Create tables
-	try rbdb.query("CREATE TABLE config(key TEXT, value TEXT)")
-	try rbdb.query("CREATE TABLE system_ready(status TEXT)")
+	try rbdb.query(sql: "CREATE TABLE config(key TEXT, value TEXT)")
+	try rbdb.query(sql: "CREATE TABLE system_ready(status TEXT)")
 
 	// Safe rule: config("debug", "true") -> system_ready("ready")
 	// No variables at all - this is always safe
