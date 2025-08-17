@@ -151,7 +151,8 @@ public class SQLiteDatabase {
 										paramIndex,
 										bytes.baseAddress,
 										Int32(dataValue.count),
-										unsafeBitCast(-1, to: sqlite3_destructor_type.self)  // SQLITE_TRANSIENT
+										// SQLITE_TRANSIENT
+										unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 									)
 								}
 								guard result == SQLITE_OK else {

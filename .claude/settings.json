@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -q '\\.swift$'; then swift format -i \"$file_path\"; fi; }"
+            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -q '\\.swift$'; then swift format -i \"$file_path\"; swift format lint -s \"$file_path\" || (exit 2 2>/dev/null); fi; }"
           }
         ]
       }
