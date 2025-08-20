@@ -20,7 +20,7 @@ struct RBDBAssertTests {
 
 		try rbdb.assert(formula: formula)
 
-		let ruleResults = try rbdb.query(sql: "SELECT name FROM user")
+		let ruleResults = Array(try rbdb.query(sql: "SELECT name FROM user"))
 		#expect(
 			ruleResults.count == 1,
 			"Should have one record stored in user table"
@@ -40,7 +40,7 @@ struct RBDBAssertTests {
 			sql: SQL("INSERT INTO user(name) VALUES (?)", arguments: ["Alice"])
 		)
 
-		let ruleResults = try rbdb.query(sql: "SELECT name FROM user")
+		let ruleResults = Array(try rbdb.query(sql: "SELECT name FROM user"))
 		#expect(
 			ruleResults.count == 1,
 			"Should have one record stored in user table"

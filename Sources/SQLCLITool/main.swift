@@ -38,13 +38,10 @@ func displaySchema(database: SQLiteDatabase) {
 				"SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name"
 		)
 
-		if results.isEmpty {
-			print("No schema objects found.")
-			return
-		}
-
+		var hasSchema = false
 		var currentType = ""
 		for row in results {
+			hasSchema = true
 			let type = row["type"] as? String ?? ""
 			let name = row["name"] as? String ?? ""
 			let sql = row["sql"] as? String ?? ""
@@ -61,6 +58,9 @@ func displaySchema(database: SQLiteDatabase) {
 			}
 			print()
 		}
+		if !hasSchema {
+			print("No schema objects found.")
+		}
 	} catch {
 		print("Error displaying schema: \(error)")
 	}
@@ -74,11 +74,7 @@ func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
 
 		do {
 			let results = try database.query(sql: SQL(content))
-			if !results.isEmpty {
-				print(formatTable(results))
-			} else {
-				print("Commands executed successfully.")
-			}
+			printTable(results)
 		} catch {
 			print("Error executing commands: \(error)")
 			return false  // Stop execution on error
@@ -92,10 +88,18 @@ func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool
 	}
 }
 
-func formatTable(_ rows: [[String: Any?]]) -> String {
-	guard !rows.isEmpty else { return "No results." }
+func formatPage<I: IteratorProtocol<Row>>(_ iter: inout I) -> String? {
+	var rows: [Row] = []
+	let pageSize = max(getTerminalHeight() - 5, 1)
+	rows.reserveCapacity(pageSize)
 
-	let columns = Array(rows[0].keys).sorted()
+	for _ in 0..<pageSize {
+		guard let row = iter.next() else { break }
+		rows.append(row)
+	}
+
+	guard let firstRow = rows.first else { return nil }
+	let columns = Array(firstRow.keys).sorted()
 	var output = ""
 
 	// Calculate column widths
@@ -141,6 +145,35 @@ func formatTable(_ rows: [[String: Any?]]) -> String {
 	}
 
 	return output
+}
+
+func printTable<C: Sequence<Row>>(_ cursor: C) {
+	var iter = cursor.makeIterator()
+	guard var page = formatPage(&iter) else {
+		print("No results.")
+		return
+	}
+
+	while true {
+		print(page)
+		guard let nextPage = formatPage(&iter) else { break }
+
+		print("-- More results available. Press enter or space for next page, anything else to stop --")
+		let input = getchar()
+		if input != 10 && input != 13 && input != 32 {
+			break
+		}
+
+		page = nextPage
+	}
+}
+
+func getTerminalHeight() -> Int {
+	var size = winsize()
+	if ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 {
+		return Int(size.ws_row)
+	}
+	return 24  // Default fallback
 }
 
 func stringValue(_ value: Any?) -> String {
@@ -470,7 +503,7 @@ func runNonInteractiveMode(database: RBDB) {
 func executeCommand(_ command: String, database: RBDB) {
 	do {
 		let results = try database.query(sql: SQL(command))
-		print(formatTable(results))
+		printTable(results)
 	} catch {
 		print("Error: \(error)")
 	}

@@ -35,9 +35,10 @@ struct RBDBSchemaTests {
 		try rbdb.query(sql: "INSERT INTO _entity (internal_entity_id) VALUES (1)")
 
 		// Query the inserted row
-		let results = try rbdb.query(
-			sql: "SELECT entity_id FROM _entity WHERE internal_entity_id = 1"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql: "SELECT entity_id FROM _entity WHERE internal_entity_id = 1"
+			))
 
 		#expect(results.count == 1, "Should have inserted one row")
 		#expect(results[0]["entity_id"] != nil, "entity_id should not be null")
@@ -67,12 +68,13 @@ struct RBDBSchemaTests {
 				Predicate(name: "likes", arguments: [.string("charlie"), .number(42)])))
 
 		// Query the generated columns
-		let results = try rbdb.query(
-			sql: """
-					SELECT arg1_constant, arg2_constant, output_type 
-					FROM _rule 
-					ORDER BY output_type
-				""")
+		let results = Array(
+			try rbdb.query(
+				sql: """
+						SELECT arg1_constant, arg2_constant, output_type 
+						FROM _rule 
+						ORDER BY output_type
+					"""))
 
 		#expect(results.count == 2, "Should have two rules")
 
@@ -164,7 +166,7 @@ struct RBDBSchemaTests {
 				Predicate(name: "parent", arguments: [.string("alice"), .string("bob")])))
 
 		// Verify the rule was inserted
-		let results = try rbdb.query(sql: "SELECT COUNT(*) as count FROM _rule")
+		let results = Array(try rbdb.query(sql: "SELECT COUNT(*) as count FROM _rule"))
 		#expect(results[0]["count"] as? Int64 == 1, "Should have one rule")
 	}
 

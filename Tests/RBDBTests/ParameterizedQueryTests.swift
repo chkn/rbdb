@@ -19,9 +19,10 @@ struct ParameterizedQueryTests {
 		)
 
 		// Query with string parameter
-		let results = try db.query(
-			sql: "SELECT * FROM test WHERE name = 'Alice'"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM test WHERE name = 'Alice'"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(results[0]["id"] as? Int64 == 1, "ID should be 1")
@@ -45,9 +46,10 @@ struct ParameterizedQueryTests {
 			sql: "INSERT INTO test (id, value) VALUES (\(Int64(2)), \(Int64(100)))"
 		)
 
-		let results = try db.query(
-			sql: "SELECT * FROM test WHERE value > \(50)"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM test WHERE value > \(50)"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(results[0]["value"] as? Int64 == 100, "Value should be 100")
@@ -66,9 +68,10 @@ struct ParameterizedQueryTests {
 			sql: "INSERT INTO test (id, price) VALUES (\(2), \(29.50))"
 		)
 
-		let results = try db.query(
-			sql: "SELECT * FROM test WHERE price < \(25.0)"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM test WHERE price < \(25.0)"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(
@@ -88,9 +91,10 @@ struct ParameterizedQueryTests {
 			sql: "INSERT INTO test (id, data) VALUES (\(1), \(testData))"
 		)
 
-		let results = try db.query(
-			sql: "SELECT * FROM test WHERE id = \(1)"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM test WHERE id = \(1)"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		if let retrievedData = results[0]["data"] as? Data {
@@ -117,9 +121,10 @@ struct ParameterizedQueryTests {
 		)
 
 		// Query with UUIDv7 parameter
-		let results = try db.query(
-			sql: "SELECT * FROM entity WHERE entity_id = \(testUUID)"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM entity WHERE entity_id = \(testUUID)"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(
@@ -149,9 +154,10 @@ struct ParameterizedQueryTests {
 				"INSERT INTO test (id, optional_text) VALUES (?, ?)", arguments: [1, NSNull()])
 		)
 
-		let results = try db.query(
-			sql: "SELECT * FROM test WHERE optional_text IS NULL"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM test WHERE optional_text IS NULL"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(
@@ -170,9 +176,10 @@ struct ParameterizedQueryTests {
 			sql: SQL("INSERT INTO test (id, optional_text) VALUES (?, ?)", arguments: [1, nil])
 		)
 
-		let results = try db.query(
-			sql: "SELECT * FROM test WHERE optional_text IS NULL"
-		)
+		let results = Array(
+			try db.query(
+				sql: "SELECT * FROM test WHERE optional_text IS NULL"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(
@@ -210,10 +217,11 @@ struct ParameterizedQueryTests {
 				""", arguments: [42, "Test Item", 99.99, testData, testUUID, NSNull()])
 		)
 
-		let results = try db.query(
-			sql:
-				"SELECT * FROM complex_test WHERE id = 42 AND name = 'Test Item' AND price > 50.0"
-		)
+		let results = Array(
+			try db.query(
+				sql:
+					"SELECT * FROM complex_test WHERE id = 42 AND name = 'Test Item' AND price > 50.0"
+			))
 
 		#expect(results.count == 1, "Should return one row")
 		#expect(results[0]["id"] as? Int64 == 42, "ID should be 42")

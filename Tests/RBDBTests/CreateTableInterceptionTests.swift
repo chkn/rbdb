@@ -14,10 +14,11 @@ struct CreateTableInterceptionTests {
 		try rbdb.query(sql: "CREATE TABLE users (id INTEGER, name TEXT, email TEXT)")
 
 		// Check that the predicate was recorded
-		let results = try rbdb.query(
-			sql:
-				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'users'"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql:
+					"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'users'"
+			))
 
 		#expect(results.count == 1, "Should have one predicate record")
 		#expect(
@@ -51,10 +52,11 @@ struct CreateTableInterceptionTests {
 		)
 
 		// Check that the predicate was recorded
-		let results = try rbdb.query(
-			sql:
-				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'products'"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql:
+					"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'products'"
+			))
 
 		#expect(results.count == 1, "Should have one predicate record")
 		#expect(
@@ -96,10 +98,11 @@ struct CreateTableInterceptionTests {
 		)
 
 		// Check that the predicate was recorded
-		let results = try rbdb.query(
-			sql:
-				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'complex_table'"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql:
+					"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'complex_table'"
+			))
 
 		#expect(results.count == 1, "Should have one predicate record")
 		#expect(
@@ -153,9 +156,10 @@ struct CreateTableInterceptionTests {
 		)
 
 		// Check that all predicates were recorded
-		let results = try rbdb.query(
-			sql: "SELECT name FROM _predicate ORDER BY name"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql: "SELECT name FROM _predicate ORDER BY name"
+			))
 
 		#expect(results.count == 3, "Should have three predicate records")
 
@@ -174,10 +178,11 @@ struct CreateTableInterceptionTests {
 		try rbdb.query(sql: "CREATE TABLE \"user-data\" (id INTEGER, info TEXT)")
 
 		// Check that the predicate was recorded
-		let results = try rbdb.query(
-			sql:
-				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'user-data'"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql:
+					"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'user-data'"
+			))
 
 		#expect(results.count == 1, "Should have one predicate record")
 		#expect(
@@ -216,10 +221,11 @@ struct CreateTableInterceptionTests {
 		try rbdb.query(sql: "CREATE TABLE simple_table (id, name, value)")
 
 		// Check that the predicate was recorded
-		let results = try rbdb.query(
-			sql:
-				"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'simple_table'"
-		)
+		let results = Array(
+			try rbdb.query(
+				sql:
+					"SELECT name, json(column_names) as column_names_json FROM _predicate WHERE name = 'simple_table'"
+			))
 
 		#expect(results.count == 1, "Should have one predicate record")
 		#expect(
@@ -250,9 +256,10 @@ struct CreateTableInterceptionTests {
 		try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 
 		// Verify it was created
-		let initialResults = try rbdb.query(
-			sql: "SELECT name FROM _predicate WHERE name = 'test_table'"
-		)
+		let initialResults = Array(
+			try rbdb.query(
+				sql: "SELECT name FROM _predicate WHERE name = 'test_table'"
+			))
 		#expect(
 			initialResults.count == 1,
 			"Should have one predicate record initially"
@@ -264,9 +271,10 @@ struct CreateTableInterceptionTests {
 		)
 
 		// Verify we still have only one record (the original one)
-		let finalResults = try rbdb.query(
-			sql: "SELECT name FROM _predicate WHERE name = 'test_table'"
-		)
+		let finalResults = Array(
+			try rbdb.query(
+				sql: "SELECT name FROM _predicate WHERE name = 'test_table'"
+			))
 		#expect(
 			finalResults.count == 1,
 			"Should still have only one predicate record"
@@ -294,9 +302,10 @@ struct CreateTableInterceptionTests {
 		try rbdb.query(sql: "CREATE TABLE test_table (id INTEGER, name TEXT)")
 
 		// Count entities before failed attempt
-		let entitiesBeforeResults = try rbdb.query(
-			sql: "SELECT COUNT(*) as count FROM _entity"
-		)
+		let entitiesBeforeResults = Array(
+			try rbdb.query(
+				sql: "SELECT COUNT(*) as count FROM _entity"
+			))
 		let entitiesBefore = entitiesBeforeResults[0]["count"] as! Int64
 
 		// Try to create the same table again without IF NOT EXISTS - should throw
@@ -305,9 +314,10 @@ struct CreateTableInterceptionTests {
 		}
 
 		// Count entities after failed attempt - should be the same
-		let entitiesAfterResults = try rbdb.query(
-			sql: "SELECT COUNT(*) as count FROM _entity"
-		)
+		let entitiesAfterResults = Array(
+			try rbdb.query(
+				sql: "SELECT COUNT(*) as count FROM _entity"
+			))
 		let entitiesAfter = entitiesAfterResults[0]["count"] as! Int64
 
 		#expect(

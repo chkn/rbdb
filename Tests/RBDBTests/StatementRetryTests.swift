@@ -25,9 +25,10 @@ struct StatementRetryTests {
 			_ = try rbdb.query(sql: SQL(multiStatementSQL))
 
 			// The final INSERT should have succeeded, so we should have 2 users
-			let userCount = try rbdb.query(
-				sql: "SELECT COUNT(*) as count FROM users"
-			)
+			let userCount = Array(
+				try rbdb.query(
+					sql: "SELECT COUNT(*) as count FROM users"
+				))
 			#expect(userCount[0]["count"] as? Int64 == 2)
 
 		} catch {
@@ -36,9 +37,10 @@ struct StatementRetryTests {
 			try rbdb.query(sql: SQL(multiStatementSQL))
 
 			// Should still end up with 2 users
-			let userCount = try rbdb.query(
-				sql: "SELECT COUNT(*) as count FROM users"
-			)
+			let userCount = Array(
+				try rbdb.query(
+					sql: "SELECT COUNT(*) as count FROM users"
+				))
 			#expect(userCount[0]["count"] as? Int64 == 2)
 		}
 	}
@@ -94,9 +96,10 @@ struct StatementRetryTests {
 		// If we reach here, offset-based retry worked
 
 		// Verify the index was created
-		let indexExists = try rbdb2.query(
-			sql: "SELECT name FROM sqlite_master WHERE type='index' AND name='users_name_idx'"
-		)
+		let indexExists = Array(
+			try rbdb2.query(
+				sql: "SELECT name FROM sqlite_master WHERE type='index' AND name='users_name_idx'"
+			))
 		#expect(indexExists.count == 1, "Index should exist")
 	}
 
@@ -138,7 +141,7 @@ struct StatementRetryTests {
 		try rbdb2.query(sql: multiStatementSQL)
 
 		// Verify both users were inserted with correct parameter values
-		let users = try rbdb2.query(sql: "SELECT id, name FROM users ORDER BY id")
+		let users = Array(try rbdb2.query(sql: "SELECT id, name FROM users ORDER BY id"))
 		#expect(users.count == 2)
 		#expect(users[0]["id"] as? Int64 == 42)
 		#expect(users[0]["name"] as? String == "Alice")

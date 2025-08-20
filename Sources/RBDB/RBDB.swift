@@ -40,10 +40,33 @@ public class RBDB: SQLiteDatabase {
 		)
 	}
 
+	private class RBDBCursor: SQLiteCursor {
+		private let rbdb: RBDB
+		init(_ rbdb: RBDB, sql: SQL) throws {
+			self.rbdb = rbdb
+			try super.init(db: rbdb.db, sql: sql)
+		}
+		override func step(statement: OpaquePointer) throws -> Bool {
+			if !rbdb.isInitializing {
+				if let normalizedSQL = sqlite3_normalized_sql(statement) {
+					let sqlString = String(cString: normalizedSQL)
+					if sqlString.hasPrefix("CREATE TABLE") {
+						try rbdb.interceptCreateTable(sqlString)
+
+						// Return empty result set instead of letting SQLite execute
+						//  the CREATE TABLE
+						return false
+					}
+				}
+			}
+			return try super.step(statement: statement)
+		}
+	}
+
 	@discardableResult
-	public override func query(sql: SQL) throws -> [[String: Any?]] {
+	public override func query(sql: SQL) throws -> any Sequence<Row> {
 		do {
-			return try super.query(sql: sql)
+			return try RBDBCursor(self, sql: sql)
 		} catch let error as SQLiteError {
 			// Only attempt to rescue if we have an index to resume from, so
 			//  we don't risk re-executing any potentially non-idempotent commands.
@@ -89,7 +112,6 @@ public class RBDB: SQLiteDatabase {
 				"SELECT name FROM _predicate WHERE name IN (\(placeholders))",
 				arguments: Array(predicateNames))
 		)
-		guard results.count != predicateNames.count else { return }
 
 		for row in results {
 			if let name = row["name"] as? String {
@@ -97,7 +119,9 @@ public class RBDB: SQLiteDatabase {
 			}
 		}
 
-		throw SQLiteError.queryError("no such table: \(predicateNames.first!)")
+		if let missing = predicateNames.first {
+			throw SQLiteError.queryError("no such table: \(missing)")
+		}
 	}
 
 	// FIXME: Make this public?
@@ -113,24 +137,6 @@ public class RBDB: SQLiteDatabase {
 			INSERT INTO _rule (internal_entity_id, formula)
 			VALUES (last_insert_rowid(), jsonb(\(usingParameters ? expr : SQL(expr))))
 			""")
-	}
-
-	override func readRows(in statement: OpaquePointer) throws -> [[String:
-		Any?]]
-	{
-		if !isInitializing {
-			if let normalizedSQL = sqlite3_normalized_sql(statement) {
-				let sqlString = String(cString: normalizedSQL)
-				if sqlString.hasPrefix("CREATE TABLE") {
-					try interceptCreateTable(sqlString)
-
-					// Return empty result set instead of letting SQLite execute
-					//  the CREATE TABLE
-					return []
-				}
-			}
-		}
-		return try super.readRows(in: statement)
 	}
 
 	func interceptCreateTable(_ sql: String) throws {
@@ -225,11 +231,14 @@ public class RBDB: SQLiteDatabase {
 				sql:
 					"SELECT json(column_names) as json_array FROM _predicate WHERE name = \(match.1)"
 			)
-			guard predicateResult.count == 1 else { return false }
+			var iter = predicateResult.makeIterator()
+
+			// Ensure there is exactly one matching predicate
+			guard let predicate = iter.next(), iter.next() == nil else { return false }
 
 			// Deserialize the JSON array of column names and use them for the view
 			guard
-				let columnNamesJson = predicateResult[0]["json_array"]
+				let columnNamesJson = predicate["json_array"]
 					as? String,
 				let columnNamesData = columnNamesJson.data(
 					using: String.Encoding.utf8
