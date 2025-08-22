@@ -170,7 +170,7 @@ func printTable<C: Sequence<Row>>(_ cursor: C) {
 
 func getTerminalHeight() -> Int {
 	var size = winsize()
-	if ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 {
+	if ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &size) == 0 {
 		return Int(size.ws_row)
 	}
 	return 24  // Default fallback
