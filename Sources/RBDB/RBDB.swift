@@ -227,14 +227,19 @@ public class RBDB: SQLiteDatabase {
 		if case .queryError(let msg, _) = error,
 			let match = msg.firstMatch(of: /no such table: ([^\s]+)/)
 		{
-			let predicateResult = try super.query(
+			let queryResults = try super.query(
 				sql:
 					"SELECT json(column_names) as json_array FROM _predicate WHERE name = \(match.1)"
 			)
-			var iter = predicateResult.makeIterator()
+			var iter = queryResults.makeIterator()
 
-			// Ensure there is exactly one matching predicate
-			guard let predicate = iter.next(), iter.next() == nil else { return false }
+			// Unknown predicate: don't rescue and let it throw the "no such table" error
+			guard let predicate = iter.next() else { return false }
+
+			// Duplicate predicates in DB: shouldn't happen; throw corruptData error
+			guard iter.next() == nil else {
+				throw RBDBError.corruptData(message: "duplicate predicate '\(match.1)'")
+			}
 
 			// Deserialize the JSON array of column names and use them for the view
 			guard
