@@ -115,8 +115,10 @@ struct RBDBSchemaTests {
 					WHERE parent = 'alice'
 				""")
 
-		// Verify that an index is being used and mentions arg1_constant
 		let planText1 = queryPlan1.compactMap { $0["detail"] as? String }.joined(separator: " ")
+
+		// NOTE: It should be "USING COVERING INDEX", but there is a bug..
+		// https://sqlite.org/forum/info/d1833ef5e40ab97d42b7f34ac488b1ca8c1d6ea46c3901a0121951a6588a6ce3
 		#expect(planText1.contains("USING INDEX"), "Query should use an index")
 		#expect(planText1.contains("arg1_constant"), "Query plan should mention arg1_constant")
 
@@ -128,8 +130,10 @@ struct RBDBSchemaTests {
 					WHERE child = 'bob'
 				""")
 
-		// Verify that an index is being used and mentions arg2_constant
 		let planText2 = queryPlan2.compactMap { $0["detail"] as? String }.joined(separator: " ")
+
+		// NOTE: It should be "USING COVERING INDEX", but there is a bug..
+		// https://sqlite.org/forum/info/d1833ef5e40ab97d42b7f34ac488b1ca8c1d6ea46c3901a0121951a6588a6ce3
 		#expect(planText2.contains("USING INDEX"), "Query should use an index")
 		#expect(planText2.contains("arg2_constant"), "Query plan should mention arg2_constant")
 	}

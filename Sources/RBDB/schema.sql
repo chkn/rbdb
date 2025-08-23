@@ -28,12 +28,13 @@ CREATE TABLE IF NOT EXISTS _rule (
     formula BLOB UNIQUE NOT NULL, -- JSONB
     output_type TEXT GENERATED ALWAYS AS (formula->>0) VIRTUAL COLLATE NOCASE,
     arg1_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[1][0].""')) VIRTUAL, -- NULL if arg is not a constant
-    arg2_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[1][1].""')) VIRTUAL  -- NULL if arg is not a constant
+    arg2_constant ANY GENERATED ALWAYS AS (json_extract(formula, '$[1][1].""')) VIRTUAL,  -- NULL if arg is not a constant
+    negative_literal_count INT GENERATED ALWAYS AS (case when output_type LIKE '@%' then json_array_length(formula) - 2 else null end) VIRTUAL -- NULL if not a horn clause
 ) STRICT;
 
--- We must ensure that the LIKE optimization can be applied for output_type
+-- Using "COLLATE NOCASE" ensures that the LIKE optimization can be applied for output_type
 -- https://www.sqlite.org/optoverview.html#the_like_optimization
-CREATE INDEX IF NOT EXISTS idx_rule_output_type_arg1_arg2 ON _rule(output_type COLLATE NOCASE, arg1_constant, arg2_constant);
-CREATE INDEX IF NOT EXISTS idx_rule_output_type_arg2_arg1 ON _rule(output_type COLLATE NOCASE, arg2_constant, arg1_constant);
+CREATE INDEX IF NOT EXISTS idx_rule_ot_nlc_arg1_arg2 ON _rule(output_type COLLATE NOCASE, negative_literal_count, arg1_constant, arg2_constant);
+CREATE INDEX IF NOT EXISTS idx_rule_ot_nlc_arg2_arg1 ON _rule(output_type COLLATE NOCASE, negative_literal_count, arg2_constant, arg1_constant);
 
 -- FIXME: Expose a "rule" view that has entity uuid and formula as a string?

@@ -201,7 +201,10 @@ public class RBDB: SQLiteDatabase {
 		let createViewSQL =
 			"""
 			CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS
-			SELECT \(selectList.joined(separator: ", ")) FROM _rule WHERE output_type = '@\(tableName)'
+			SELECT \(selectList.joined(separator: ", "))
+			FROM _rule
+			WHERE output_type = '@\(tableName)'
+			  AND negative_literal_count = 0
 			"""
 		try super.query(sql: SQL(createViewSQL))
 
