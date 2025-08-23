@@ -158,7 +158,9 @@ func printTable<C: Sequence<Row>>(_ cursor: C) {
 		print(page)
 		guard let nextPage = formatPage(&iter) else { break }
 
-		print("-- More results available. Press enter or space for next page, anything else to stop --")
+		print(
+			"-- More results available. Press enter or space for next page, anything else to stop --"
+		)
 		let input = getchar()
 		if input != 10 && input != 13 && input != 32 {
 			break
