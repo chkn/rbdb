@@ -178,10 +178,9 @@ struct RBDBSchemaTests {
 	func assertValidatesHornClausePredicates() async throws {
 		let rbdb = try RBDB(path: ":memory:")
 
-		// Try to assert a horn clause with non-existent predicate
-		let variable = Var()
+		// Try to assert a fact with non-existent predicate (using constant to avoid validation error)
 		let hornClause = Formula.hornClause(
-			positive: Predicate(name: "nonexistent", arguments: [.variable(variable)]),
+			positive: Predicate(name: "nonexistent", arguments: [.string("value")]),
 			negative: []
 		)
 

@@ -141,3 +141,25 @@ func acceptAllConstants() async throws {
 	// This should succeed
 	try rbdb.assert(formula: safeRule)
 }
+
+@Test("Reject facts with free variables")
+func rejectFactsWithFreeVariables() async throws {
+	let rbdb = try RBDB(path: ":memory:")
+
+	// Create table
+	try rbdb.query(sql: "CREATE TABLE human(name TEXT)")
+
+	// Try to assert a fact with a free variable: human(X)
+	// This is a horn clause with no negative literals, but X is unbound
+	let varX = Var(id: 0)  // X - UNSAFE, appears only in head (no body predicates to bind it)
+
+	let invalidFact = Formula.hornClause(
+		positive: Predicate(name: "human", arguments: [.variable(varX)]),
+		negative: []  // No negative literals = fact, but X has no binding
+	)
+
+	// This should throw an error about unsafe variables
+	#expect(throws: (any Error).self) {
+		try rbdb.assert(formula: invalidFact)
+	}
+}

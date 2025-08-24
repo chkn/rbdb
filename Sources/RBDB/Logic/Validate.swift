@@ -19,20 +19,19 @@ class UnsafeVariableCollector: VariableCollectingVisitor, SymbolVisitor {
 	func visit(formula: Formula) -> Formula {
 		switch formula {
 		case .hornClause(positive: let positive, negative: let negatives):
-			if !negatives.isEmpty {
-				_ = visit(predicate: positive)
-				let headVariables = variableMapping
+			_ = visit(predicate: positive)
+			let headVariables = variableMapping
 
-				variableMapping.removeAll()
-				for negative in negatives {
-					_ = visit(predicate: negative)
-				}
-				let bodyVariables = variableMapping
+			variableMapping.removeAll()
+			for negative in negatives {
+				_ = visit(predicate: negative)
+			}
+			let bodyVariables = variableMapping
 
-				for v in headVariables {
-					if bodyVariables[v.key] == nil {
-						unsafeVariables.append(v.value)
-					}
+			// Check for unsafe variables in the head
+			for v in headVariables {
+				if bodyVariables[v.key] == nil {
+					unsafeVariables.append(v.value)
 				}
 			}
 		}
