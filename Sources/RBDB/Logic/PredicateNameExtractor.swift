@@ -1,19 +1,15 @@
 import Foundation
 
-class PredicateNameExtractor: SymbolVisitor {
-	var predicateNames = Set<String>()
-
-	func visit(predicate: Predicate) -> Predicate {
-		predicateNames.insert(predicate.name)
-		return predicate
+struct PredicateNameExtractor: SymbolReducer {
+	func reduce(_ predicateNames: Set<String>, _ predicate: Predicate) -> Set<String> {
+		var names = predicateNames
+		names.insert(predicate.name)
+		return names
 	}
-
 }
 
 extension Symbol {
 	public func getPredicateNames() -> Set<String> {
-		let visitor = PredicateNameExtractor()
-		_ = self.accept(visitor: visitor)
-		return visitor.predicateNames
+		reduce(Set<String>(), PredicateNameExtractor())
 	}
 }

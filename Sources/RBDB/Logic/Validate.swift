@@ -1,6 +1,6 @@
 import Foundation
 
-public enum FormulaValidationError: Error, Equatable {
+public enum ValidationError: Error, Equatable {
 	case unsafeVariables([Var])
 
 	public var localizedDescription: String {
@@ -13,20 +13,19 @@ public enum FormulaValidationError: Error, Equatable {
 	}
 }
 
-class UnsafeVariableCollector: VariableCollectingVisitor, SymbolVisitor {
-	var unsafeVariables: [Var] = []
+struct UnsafeVariableCollector: SymbolReducer {
+	func reduce(_ prev: [Var], _ formula: Formula) -> [Var] {
+		var unsafeVariables = prev
+		let collector = VariableCollector()
 
-	func visit(formula: Formula) -> Formula {
 		switch formula {
 		case .hornClause(positive: let positive, negative: let negatives):
-			_ = visit(predicate: positive)
-			let headVariables = variableMapping
+			let headVariables = collector.reduce([:], positive)
 
-			variableMapping.removeAll()
+			var bodyVariables: [ObjectIdentifier: Var] = [:]
 			for negative in negatives {
-				_ = visit(predicate: negative)
+				bodyVariables.merge(collector.reduce([:], negative), uniquingKeysWith: { $1 })
 			}
-			let bodyVariables = variableMapping
 
 			// Check for unsafe variables in the head
 			for v in headVariables {
@@ -35,17 +34,17 @@ class UnsafeVariableCollector: VariableCollectingVisitor, SymbolVisitor {
 				}
 			}
 		}
-		return formula
+
+		return unsafeVariables
 	}
 }
 
-extension Formula {
-	/// Validates this `Formula` and throws a `FormulaValidationError` if it fails validation.
+extension Symbol {
+	/// Validates this `Symbol` and throws a `FormulaValidationError` if it fails validation.
 	func validate() throws {
-		let collector = UnsafeVariableCollector()
-		_ = accept(visitor: collector)
-		if !collector.unsafeVariables.isEmpty {
-			throw FormulaValidationError.unsafeVariables(collector.unsafeVariables)
+		let unsafeVariables = reduce([], UnsafeVariableCollector())
+		if !unsafeVariables.isEmpty {
+			throw ValidationError.unsafeVariables(unsafeVariables)
 		}
 	}
 }

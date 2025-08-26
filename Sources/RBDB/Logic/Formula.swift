@@ -92,24 +92,41 @@ public enum Formula: Symbol {
 		return nil
 	}
 
-	public func accept<V>(visitor: V) -> Formula where V: SymbolVisitor {
-		visitor.visit(formula: self)
+	public func rewrite<T: SymbolRewriter>(_ rewriter: T) -> Formula {
+		rewriter.rewrite(formula: self)
+	}
+
+	public func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) -> T.Result {
+		reducer.reduce(initialResult, self)
 	}
 }
 
-extension SymbolVisitor {
-	public func visit(formula: Formula) -> Formula {
+extension SymbolRewriter {
+	public func rewrite(formula: Formula) -> Formula {
 		switch formula {
 		case .hornClause(positive: let positive, negative: let negatives):
 			.hornClause(
-				positive: visit(predicate: positive),
-				negative: negatives.map(visit(predicate:))
+				positive: rewrite(predicate: positive),
+				negative: negatives.map(rewrite(predicate:))
 			)
 		}
 	}
 
-	public func visit(predicate: Predicate) -> Predicate {
-		Predicate(name: predicate.name, arguments: predicate.arguments.map(visit(term:)))
+	public func rewrite(predicate: Predicate) -> Predicate {
+		Predicate(name: predicate.name, arguments: predicate.arguments.map(rewrite(term:)))
+	}
+}
+
+extension SymbolReducer {
+	public func reduce(_ prev: Result, _ formula: Formula) -> Result {
+		switch formula {
+		case .hornClause(positive: let positive, negative: let negatives):
+			negatives.reduce(reduce(prev, positive), reduce)
+		}
+	}
+
+	public func reduce(_ prev: Result, _ predicate: Predicate) -> Result {
+		predicate.arguments.reduce(prev, reduce)
 	}
 }
 
