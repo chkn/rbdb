@@ -30,6 +30,10 @@ public enum SQLiteError: Error {
 public class SQLiteDatabase {
 	var db: OpaquePointer?
 
+	var lastErrorMessage: String {
+		String(cString: sqlite3_errmsg(db!))
+	}
+
 	/// Creates a new SQLite database connection.
 	///
 	/// Opens or creates a SQLite database at the specified path and registers
@@ -45,7 +49,7 @@ public class SQLiteDatabase {
 			SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE,
 			nil
 		) != SQLITE_OK {
-			let errmsg = String(cString: sqlite3_errmsg(db!))
+			let errmsg = lastErrorMessage
 			sqlite3_close(db)
 			throw SQLiteError.couldNotOpenDatabase(errmsg)
 		}
@@ -90,7 +94,7 @@ public class SQLiteDatabase {
 	///     """)
 	/// ```
 	@discardableResult
-	public func query(sql: SQL) throws -> any Sequence<Row> {
-		return try SQLiteCursor(db: db, sql: sql)
+	public func query(sql: SQL) throws -> SQLiteCursor {
+		return try SQLiteCursor(self, sql: sql)
 	}
 }

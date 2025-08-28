@@ -44,11 +44,11 @@ public class RBDB: SQLiteDatabase {
 		private let rbdb: RBDB
 		init(_ rbdb: RBDB, sql: SQL) throws {
 			self.rbdb = rbdb
-			try super.init(db: rbdb.db, sql: sql)
+			try super.init(rbdb, sql: sql)
 		}
-		override func step(statement: OpaquePointer) throws -> Bool {
+		override func step(statement: SQLiteCursor.PreparedStatement) throws -> Bool {
 			if !rbdb.isInitializing {
-				if let normalizedSQL = sqlite3_normalized_sql(statement) {
+				if let normalizedSQL = sqlite3_normalized_sql(statement.ptr) {
 					let sqlString = String(cString: normalizedSQL)
 					if sqlString.hasPrefix("CREATE TABLE") {
 						try rbdb.interceptCreateTable(sqlString)
@@ -64,7 +64,7 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	@discardableResult
-	public override func query(sql: SQL) throws -> any Sequence<Row> {
+	public override func query(sql: SQL) throws -> SQLiteCursor {
 		do {
 			return try RBDBCursor(self, sql: sql)
 		} catch let error as SQLiteError {
@@ -234,7 +234,7 @@ public class RBDB: SQLiteDatabase {
 				sql:
 					"SELECT json(column_names) as json_array FROM _predicate WHERE name = \(match.1)"
 			)
-			var iter = queryResults.makeIterator()
+			let iter = queryResults.makeIterator()
 
 			// Unknown predicate: don't rescue and let it throw the "no such table" error
 			guard let predicate = iter.next() else { return false }
