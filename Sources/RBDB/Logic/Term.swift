@@ -67,8 +67,9 @@ public enum Term: Symbol {
 		rewriter.rewrite(term: self)
 	}
 
-	public func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) -> T.Result {
-		reducer.reduce(initialResult, self)
+	public func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) throws -> T.Result
+	{
+		try reducer.reduce(initialResult, self)
 	}
 }
 
@@ -83,14 +84,14 @@ extension SymbolRewriter {
 }
 
 extension SymbolReducer {
-	public func reduce(_ prev: Result, _ term: Term) -> Result {
+	public func reduce(_ prev: Result, _ term: Term) throws -> Result {
 		if case let .variable(v) = term {
-			return reduce(prev, v)
+			return try reduce(prev, v)
 		}
 		return prev
 	}
 
-	public func reduce(_ prev: Result, _ variable: Var) -> Result { prev }
+	public func reduce(_ prev: Result, _ variable: Var) throws -> Result { prev }
 }
 
 extension Term: Codable {

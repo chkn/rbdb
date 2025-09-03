@@ -1,7 +1,7 @@
 import Foundation
 
 struct PredicateNameExtractor: SymbolReducer {
-	func reduce(_ predicateNames: Set<String>, _ predicate: Predicate) -> Set<String> {
+	func reduce(_ predicateNames: Set<String>, _ predicate: Predicate) throws -> Set<String> {
 		var names = predicateNames
 		names.insert(predicate.name)
 		return names
@@ -9,7 +9,7 @@ struct PredicateNameExtractor: SymbolReducer {
 }
 
 extension Symbol {
-	public func getPredicateNames() -> Set<String> {
-		reduce(Set<String>(), PredicateNameExtractor())
+	public func getPredicateNames() throws -> Set<String> {
+		try reduce(Set<String>(), PredicateNameExtractor())
 	}
 }

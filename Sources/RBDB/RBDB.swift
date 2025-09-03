@@ -102,7 +102,7 @@ public class RBDB: SQLiteDatabase {
 	}
 
 	private func validatePredicatesExist(in formula: Formula) throws {
-		var predicateNames = formula.getPredicateNames()
+		var predicateNames = try formula.getPredicateNames()
 		guard !predicateNames.isEmpty else { return }
 
 		let placeholders = Array(repeating: "?", count: predicateNames.count).joined(
@@ -184,28 +184,63 @@ public class RBDB: SQLiteDatabase {
 		)
 	}
 
-	private func createViewAndTrigger(for tableName: String, columns: [String])
+	private func createViewAndTrigger<T: StringProtocol>(for tableName: T, columns: [String])
 		throws
 	{
 		let columnList = columns.map { "[\($0)]" }.joined(separator: ", ")
+		var createViewSQL = "CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS "
+
+		// If there are no negative literals in a horn clause, it's a fact, and since we don't
+		//  allow variables that only appear in the head and not the body, we shouldn't hit
+		//  any variables in this case.. just assume the values are constants and select them.
 		var selectList: [String] = []
 		selectList.reserveCapacity(columns.count)
 		for i in 1...columns.count {
-			// We're selecting WHERE output_type is a predicate formula,
-			//  so all its parameters should be constants (we don't allow free vars)
 			switch i {
-			case 1...2: selectList.append("arg\(i)_constant")
-			default: selectList.append("json_extract(formula, '$[1][\(i-1)].\"\"')")
+			case 1...2: selectList.append("arg\(i)_constant")  // these are indexed
+			default: selectList.append("json_extract(formula, '$[1][\(i-1)].\"\"')")  // not indexed
 			}
 		}
-		let createViewSQL =
+		createViewSQL +=
 			"""
-			CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS
 			SELECT \(selectList.joined(separator: ", "))
 			FROM _rule
 			WHERE output_type = '@\(tableName)'
 			  AND negative_literal_count = 0
 			"""
+
+		let rules = try super.query(
+			sql: """
+				SELECT json(formula) as json
+				FROM _rule
+				WHERE negative_literal_count > 0
+				  AND output_type = \("@\(tableName)")
+				""")
+
+		let decoder = JSONDecoder()
+		for row in rules {
+			if let json = row["json"] as? String {
+				guard let jsonData = json.data(using: .utf8) else {
+					throw RBDBError.corruptData(
+						message: "expected json stored as UTF-8 in _rule.formula")
+				}
+				let rule = try decoder.decode(Formula.self, from: jsonData)
+				var columnsQuery: SQLiteCursor? = nil
+				let ruleSQL = try rule.toSQL({ predicateName in
+					guard
+						let columns = try self.getColumns(
+							for: predicateName, query: &columnsQuery)
+					else {
+						throw RBDBError.corruptData(
+							message:
+								"table '\(tableName)' references unknown predicate '\(predicateName)'"
+						)
+					}
+					return columns
+				})
+				createViewSQL += " UNION \(ruleSQL)"
+			}
+		}
 		try super.query(sql: SQL(createViewSQL))
 
 		// Create INSTEAD OF INSERT trigger
@@ -226,42 +261,53 @@ public class RBDB: SQLiteDatabase {
 		try super.query(sql: SQL(createTrigger))
 	}
 
+	// Returns nil on unknown predicate
+	private func getColumns<T: StringProtocol>(for predicate: T) throws -> [String]? {
+		var cursor: SQLiteCursor? = nil
+		return try getColumns(for: predicate, query: &cursor)
+	}
+
+	private func getColumns<T: StringProtocol>(for predicate: T, query: inout SQLiteCursor?) throws
+		-> [String]?
+	{
+		var cursor: SQLiteCursor
+		if let q = query {
+			cursor = try q.rerun(withArguments: [predicate])
+		} else {
+			cursor = try super.query(
+				sql:
+					"SELECT json(column_names) as json_array FROM _predicate WHERE name = \(predicate)"
+			)
+			query = cursor
+		}
+		let iter = cursor.makeIterator()
+		guard let predicate = iter.next() else { return nil }
+
+		// Duplicate predicates in DB: shouldn't happen; throw corruptData error
+		guard iter.next() == nil else {
+			throw RBDBError.corruptData(message: "duplicate predicate '\(predicate)'")
+		}
+
+		guard
+			let columnNamesJson = predicate["json_array"] as? String,
+			let columnNamesData = columnNamesJson.data(using: .utf8),
+			let columnNames = try? JSONDecoder().decode([String].self, from: columnNamesData),
+			!columnNames.isEmpty
+		else {
+			throw RBDBError.corruptData(
+				message: "expected JSON array in _predicate.column_names"
+			)
+		}
+
+		return columnNames
+	}
+
 	private func rescue(error: SQLiteError) throws -> Bool {
 		if case .queryError(let msg, _) = error,
-			let match = msg.firstMatch(of: /no such table: ([^\s]+)/)
+			let match = msg.firstMatch(of: /no such table: ([^\s]+)/),
+			let columnNames = try getColumns(for: match.1)
 		{
-			let queryResults = try super.query(
-				sql:
-					"SELECT json(column_names) as json_array FROM _predicate WHERE name = \(match.1)"
-			)
-			let iter = queryResults.makeIterator()
-
-			// Unknown predicate: don't rescue and let it throw the "no such table" error
-			guard let predicate = iter.next() else { return false }
-
-			// Duplicate predicates in DB: shouldn't happen; throw corruptData error
-			guard iter.next() == nil else {
-				throw RBDBError.corruptData(message: "duplicate predicate '\(match.1)'")
-			}
-
-			// Deserialize the JSON array of column names and use them for the view
-			guard
-				let columnNamesJson = predicate["json_array"]
-					as? String,
-				let columnNamesData = columnNamesJson.data(
-					using: String.Encoding.utf8
-				),
-				let columnNames = try JSONSerialization.jsonObject(
-					with: columnNamesData
-				) as? [String],
-				!columnNames.isEmpty
-			else {
-				throw RBDBError.corruptData(
-					message: "expected JSON array in _predicate.column_names"
-				)
-			}
-
-			try createViewAndTrigger(for: String(match.1), columns: columnNames)
+			try createViewAndTrigger(for: match.1, columns: columnNames)
 			return true
 		}
 		return false

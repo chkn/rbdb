@@ -55,7 +55,7 @@ public class SQLiteDatabase {
 		}
 
 		// Register the custom uuidv7() function
-		let result = sqlite3_create_function(
+		let uuidResult = sqlite3_create_function(
 			db,  // Database connection
 			"uuidv7",  // Function name
 			0,  // Number of arguments (0 for no arguments)
@@ -65,9 +65,25 @@ public class SQLiteDatabase {
 			nil,  // Step function (for aggregates)
 			nil  // Final function (for aggregates)
 		)
-		if result != SQLITE_OK {
+		if uuidResult != SQLITE_OK {
 			sqlite3_close(db)
 			throw SQLiteError.couldNotRegisterFunction(name: "uuidv7")
+		}
+
+		// Register the custom sql_exec() function
+		let sqlExecResult = sqlite3_create_function(
+			db,  // Database connection
+			"sql_exec",  // Function name
+			1,  // Number of arguments (1 for SQL string)
+			SQLITE_UTF8,
+			UnsafeMutableRawPointer(db),  // Pass db handle as user data
+			sqlExecSQLiteFunction,  // Function implementation
+			nil,  // Step function (for aggregates)
+			nil  // Final function (for aggregates)
+		)
+		if sqlExecResult != SQLITE_OK {
+			sqlite3_close(db)
+			throw SQLiteError.couldNotRegisterFunction(name: "sql_exec")
 		}
 	}
 
@@ -96,5 +112,46 @@ public class SQLiteDatabase {
 	@discardableResult
 	public func query(sql: SQL) throws -> SQLiteCursor {
 		return try SQLiteCursor(self, sql: sql)
+	}
+}
+
+/// Custom SQLite function to execute SQL statements from within triggers
+func sqlExecSQLiteFunction(
+	context: OpaquePointer?,
+	argc: Int32,
+	argv: UnsafeMutablePointer<OpaquePointer?>?
+) {
+	guard let context = context,
+		let argv = argv,
+		argc == 1,
+		let sqlPointer = argv[0]
+	else {
+		sqlite3_result_error(context, "sql_exec requires exactly one argument", -1)
+		return
+	}
+
+	// Get the database handle from user data
+	guard let userData = sqlite3_user_data(context) else {
+		sqlite3_result_error(context, "sql_exec: no database handle", -1)
+		return
+	}
+	let db = OpaquePointer(userData)
+
+	// Get the SQL string
+	guard let sqlCString = sqlite3_value_text(sqlPointer) else {
+		sqlite3_result_error(context, "sql_exec: invalid SQL string", -1)
+		return
+	}
+
+	let sqlString = String(cString: sqlCString)
+
+	// Execute the SQL
+	let result = sqlite3_exec(db, sqlString, nil, nil, nil)
+
+	if result == SQLITE_OK {
+		sqlite3_result_int(context, 1)  // Return 1 for success
+	} else {
+		let errorMsg = String(cString: sqlite3_errmsg(db))
+		sqlite3_result_error(context, "sql_exec: \(errorMsg)", -1)
 	}
 }

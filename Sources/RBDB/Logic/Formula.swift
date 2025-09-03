@@ -96,8 +96,9 @@ public enum Formula: Symbol {
 		rewriter.rewrite(formula: self)
 	}
 
-	public func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) -> T.Result {
-		reducer.reduce(initialResult, self)
+	public func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) throws -> T.Result
+	{
+		try reducer.reduce(initialResult, self)
 	}
 }
 
@@ -118,15 +119,15 @@ extension SymbolRewriter {
 }
 
 extension SymbolReducer {
-	public func reduce(_ prev: Result, _ formula: Formula) -> Result {
+	public func reduce(_ prev: Result, _ formula: Formula) throws -> Result {
 		switch formula {
 		case .hornClause(positive: let positive, negative: let negatives):
-			negatives.reduce(reduce(prev, positive), reduce)
+			try negatives.reduce(reduce(prev, positive), reduce)
 		}
 	}
 
-	public func reduce(_ prev: Result, _ predicate: Predicate) -> Result {
-		predicate.arguments.reduce(prev, reduce)
+	public func reduce(_ prev: Result, _ predicate: Predicate) throws -> Result {
+		try predicate.arguments.reduce(prev, reduce)
 	}
 }
 

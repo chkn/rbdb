@@ -24,6 +24,16 @@ extension Var: Comparable {
 	}
 }
 
+extension Var: Hashable {
+	public func hash(into hasher: inout Hasher) {
+		if let id = self.id {
+			hasher.combine(id)
+		} else {
+			hasher.combine(ObjectIdentifier(self))
+		}
+	}
+}
+
 extension Var: CustomStringConvertible {
 	public var description: String {
 		if let id = self.id {

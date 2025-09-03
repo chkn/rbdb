@@ -37,4 +37,13 @@ CREATE TABLE IF NOT EXISTS _rule (
 CREATE INDEX IF NOT EXISTS idx_rule_ot_nlc_arg1_arg2 ON _rule(output_type COLLATE NOCASE, negative_literal_count, arg1_constant, arg2_constant);
 CREATE INDEX IF NOT EXISTS idx_rule_ot_nlc_arg2_arg1 ON _rule(output_type COLLATE NOCASE, negative_literal_count, arg2_constant, arg1_constant);
 
+-- Trigger to drop temporary views when new rules (not facts) are added
+CREATE TRIGGER IF NOT EXISTS _drop_temp_view_on_rule_insert
+AFTER INSERT ON _rule
+WHEN NEW.negative_literal_count > 0
+BEGIN
+  -- Drop the temporary view if it exists (using substr to remove @ prefix)
+  SELECT sql_exec('DROP VIEW IF EXISTS ' || substr(NEW.output_type, 2));
+END;
+
 -- FIXME: Expose a "rule" view that has entity uuid and formula as a string?

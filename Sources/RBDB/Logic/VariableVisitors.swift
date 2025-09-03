@@ -2,27 +2,31 @@ import Foundation
 
 /// Derive from this and conform to the `SymbolRewriter` protocol.
 class VariableMappingRewriter {
-	var variableMapping: [ObjectIdentifier: Var] = [:]
+	var variableMapping: [Var: Var] = [:]
 
 	func map(variable: Var) -> Var { variable }
 
 	func rewrite(variable: Var) -> Var {
-		let varId = ObjectIdentifier(variable)
-
-		if let existingVar = variableMapping[varId] {
+		if let existingVar = variableMapping[variable] {
 			return existingVar
 		} else {
 			let mappedVar = map(variable: variable)
-			variableMapping[varId] = mappedVar
+			variableMapping[variable] = mappedVar
 			return mappedVar
 		}
 	}
 }
 
 struct VariableCollector: SymbolReducer {
-	func reduce(_ prev: [ObjectIdentifier: Var], _ variable: Var) -> [ObjectIdentifier: Var] {
+	func reduce(_ prev: Set<Var>, _ variable: Var) throws -> Set<Var> {
 		var variables = prev
-		variables[ObjectIdentifier(variable)] = variable
+		variables.insert(variable)
 		return variables
+	}
+}
+
+extension Symbol {
+	public func getVariables() throws -> [Var] {
+		Array(try reduce(Set(), VariableCollector()))
 	}
 }

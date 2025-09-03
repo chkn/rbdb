@@ -1,7 +1,7 @@
 public protocol Symbol: Comparable, Codable, LosslessStringConvertible {
 	var type: SymbolType { get }
 	func rewrite<T: SymbolRewriter>(_ rewriter: T) -> Self
-	func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) -> T.Result
+	func reduce<T: SymbolReducer>(_ initialResult: T.Result, _ reducer: T) throws -> T.Result
 }
 
 public protocol SymbolRewriter {
@@ -14,9 +14,9 @@ public protocol SymbolRewriter {
 
 public protocol SymbolReducer {
 	associatedtype Result
-	func reduce(_ prev: Result, _ formula: Formula) -> Result
-	func reduce(_ prev: Result, _ predicate: Predicate) -> Result
+	func reduce(_ prev: Result, _ formula: Formula) throws -> Result
+	func reduce(_ prev: Result, _ predicate: Predicate) throws -> Result
 
-	func reduce(_ prev: Result, _ term: Term) -> Result
-	func reduce(_ prev: Result, _ variable: Var) -> Result
+	func reduce(_ prev: Result, _ term: Term) throws -> Result
+	func reduce(_ prev: Result, _ variable: Var) throws -> Result
 }

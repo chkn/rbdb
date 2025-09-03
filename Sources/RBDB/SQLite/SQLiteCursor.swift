@@ -213,6 +213,7 @@ public class SQLiteCursor: Sequence, IteratorProtocol {
 	///
 	/// - Parameter newArguments: The new arguments to bind to the prepared statements. If not provided, the previous arguments are used.
 	/// - Throws: `SQLiteError` if parameter binding or execution of the query fails
+	@discardableResult
 	func rerun(withArguments newArguments: [Any?]? = nil) throws -> Self {
 		for statement in statements {
 			sqlite3_reset(statement.ptr)
