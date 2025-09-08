@@ -18,37 +18,6 @@ import Testing
 	}
 }
 
-// String conversion tests
-@Test func formulaStringConversions() async throws {
-	// Test simple predicate
-	let simple = Formula.predicate(Predicate(name: "Foo", arguments: []))
-	#expect(simple.description == "foo()")
-	#expect(Formula("foo()") == simple)
-
-	// Test predicate with arguments
-	let withArgs = Formula.predicate(
-		Predicate(
-			name: "Bar",
-			arguments: [.string("hello"), .number(42.0), .boolean(true)]
-		))
-	#expect(withArgs.description == "bar(\"hello\", 42.0, true)")
-	#expect(Formula("bar(\"hello\", 42.0, true)") == withArgs)
-
-}
-
-@Test func formulaStringConversionsRoundTrip() async throws {
-	let formulas: [Formula] = [
-		.predicate(Predicate(name: "Foo", arguments: [])),
-		.predicate(Predicate(name: "Bar", arguments: [.string("test"), .number(3.14)])),
-	]
-
-	for formula in formulas {
-		let description = formula.description
-		let parsed = Formula(description)
-		#expect(parsed == formula, "Failed round-trip for formula: \(formula)")
-	}
-}
-
 @Test func formulasWithDifferentVariableNamesCanonicalizeEqually() async throws {
 	// Test that formulas with the same structure but different variable names
 	// become equal after canonicalization
@@ -146,34 +115,4 @@ import Testing
 	#expect(
 		canonical1 == canonical3,
 		"Horn clauses with different negative order should canonicalize equally")
-}
-
-@Test func parseHornClausesWithNegatives() async throws {
-	// Test parsing horn clauses with negative literals
-	// These should match the description format: "negatives -> positive"
-
-	// Test single negative literal
-	let singleNegative = "foo(\"x\") -> bar(\"y\")"
-	let expectedSingle = Formula.hornClause(
-		positive: Predicate(name: "bar", arguments: [.string("y")]),
-		negative: [Predicate(name: "foo", arguments: [.string("x")])]
-	)
-
-	// This should now work with the horn clause parsing implementation
-	let parsedSingle = Formula(singleNegative)
-	#expect(parsedSingle == expectedSingle, "Failed to parse single negative horn clause")
-
-	// Test multiple negative literals
-	let multipleNegatives = "(foo(\"x\") ∧ baz(\"z\")) -> bar(\"y\")"
-	let expectedMultiple = Formula.hornClause(
-		positive: Predicate(name: "bar", arguments: [.string("y")]),
-		negative: [
-			Predicate(name: "foo", arguments: [.string("x")]),
-			Predicate(name: "baz", arguments: [.string("z")]),
-		]
-	)
-
-	// This should now work with the horn clause parsing implementation
-	let parsedMultiple = Formula(multipleNegatives)
-	#expect(parsedMultiple == expectedMultiple, "Failed to parse multiple negative horn clause")
 }

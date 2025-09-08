@@ -35,28 +35,3 @@ extension Predicate: Codable {
 		self.init(name: name, arguments: args)
 	}
 }
-
-extension Predicate: LosslessStringConvertible {
-	public var description: String {
-		"\(name)(\(arguments.map({ String(describing: $0) }).joined(separator: ", ")))"
-	}
-
-	public init?(_ description: String) {
-		// Parse a predicate string like "name(arg1, arg2, ...)"
-		guard let match = description.wholeMatch(of: /^(\w+)\(([^)]*)\)$/) else { return nil }
-
-		let name = String(match.1)
-		let argsString = String(match.2).trimmingCharacters(in: .whitespacesAndNewlines)
-
-		var arguments: [Term] = []
-		if !argsString.isEmpty {
-			let argStrings = StringParsing.split(argsString, by: ",")
-			for argString in argStrings {
-				guard let term = Term(argString) else { return nil }
-				arguments.append(term)
-			}
-		}
-
-		self.init(name: name, arguments: arguments)
-	}
-}

@@ -13,56 +13,6 @@ public enum Term: Symbol {
 		}
 	}
 
-	public var description: String {
-		switch self {
-		case .variable(let v): String(describing: v)
-		case .boolean(let v): v ? "true" : "false"
-		case .number(let v): String(describing: v)
-		case .string(let v): "\"\(v)\""
-		}
-	}
-
-	public init?(_ description: String) {
-		let trimmed = description.trimmingCharacters(
-			in: .whitespacesAndNewlines
-		)
-
-		// Try to parse as boolean
-		if trimmed == "true" {
-			self = .boolean(true)
-			return
-		}
-		if trimmed == "false" {
-			self = .boolean(false)
-			return
-		}
-
-		// Try to parse as quoted string
-		if ((trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""))
-			|| (trimmed.hasPrefix("'") && trimmed.hasSuffix("'")))
-			&& trimmed.count >= 2
-		{
-			let stringValue = String(trimmed.dropFirst().dropLast())
-			self = .string(stringValue)
-			return
-		}
-
-		// Try to parse as number
-		if let floatValue = Float(trimmed) {
-			self = .number(floatValue)
-			return
-		}
-
-		// Try to parse as variable (single letter like 'a')
-		if let char = trimmed.first, char >= "a" && char <= "z" {
-			let id = UInt8(char.asciiValue! - 97)  // 'a' = 97
-			self = .variable(Var(id: id))
-			return
-		}
-
-		return nil
-	}
-
 	public func rewrite<T: SymbolRewriter>(_ rewriter: T) -> Term {
 		rewriter.rewrite(term: self)
 	}

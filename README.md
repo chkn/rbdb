@@ -34,7 +34,7 @@ try db.query("CREATE TABLE user(name)")
 You can assert simple facts using either SQL or the `Formula` type:
 
 ```swift
-let formula1 = Formula("user('Alice')")!
+let formula1 = Formula.predicate(Predicate(name: "user", arguments: [.string("Alice")]))
 try db.assert(formula: formula1)
 
 // The above is equivalent to:
@@ -44,8 +44,10 @@ try db.query("INSERT INTO user(name) VALUES ('Alice')")
 ### Canonicalize logically equivalent formulas
 
 ```swift
-let f1 = Formula("∀x User(x)")!
-let f2 = Formula("∀y User(y)")!
+let x = Var()
+let y = Var()
+let f1 = Formula.predicate(Predicate(name: "User", arguments: [.variable(x)]))
+let f2 = Formula.predicate(Predicate(name: "User", arguments: [.variable(y)]))
 assert(f1.canonicalize() == f2.canonicalize())  // true
 ```
 
