@@ -14,9 +14,15 @@ let package = Package(
 		.library(
 			name: "RBDB",
 			targets: ["RBDB"]),
+		.library(
+			name: "Datalog",
+			targets: ["Datalog"]),
 		.executable(
 			name: "sql",
 			targets: ["SQLCLITool"]),
+	],
+	dependencies: [
+		.package(url: "https://github.com/pointfreeco/swift-parsing.git", from: "0.14.1")
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -27,6 +33,13 @@ let package = Package(
 				.embedInCode("schema.sql")
 			]
 		),
+		.target(
+			name: "Datalog",
+			dependencies: [
+				"RBDB",
+				.product(name: "Parsing", package: "swift-parsing"),
+			]
+		),
 		.executableTarget(
 			name: "SQLCLITool",
 			dependencies: ["RBDB"]
@@ -34,6 +47,10 @@ let package = Package(
 		.testTarget(
 			name: "RBDBTests",
 			dependencies: ["RBDB"]
+		),
+		.testTarget(
+			name: "DatalogTests",
+			dependencies: ["Datalog", "RBDB"]
 		),
 	]
 )

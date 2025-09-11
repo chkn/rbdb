@@ -37,7 +37,7 @@ extension Var: Hashable {
 extension Var: CustomStringConvertible {
 	public var description: String {
 		if let id = self.id {
-			let scalar = UnicodeScalar(97 + Int(id))!
+			let scalar = UnicodeScalar(65 + Int(id))!
 			return String(scalar)
 		} else {
 			return String(format: "0x%llx", UInt(bitPattern: ObjectIdentifier(self)))
