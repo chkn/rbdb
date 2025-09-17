@@ -20,6 +20,13 @@ public enum Formula: Symbol {
 	{
 		try reducer.reduce(initialResult, self)
 	}
+
+	public func isRecursive<T: StringProtocol>(for predicateName: T) -> Bool {
+		switch self {
+		case .hornClause(positive: _, negative: let negatives):
+			return negatives.contains { $0.name == predicateName }
+		}
+	}
 }
 
 extension SymbolRewriter {

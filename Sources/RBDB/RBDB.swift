@@ -188,7 +188,6 @@ public class RBDB: SQLiteDatabase {
 		throws
 	{
 		let columnList = columns.map { "[\($0)]" }.joined(separator: ", ")
-		var createViewSQL = "CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS "
 
 		// If there are no negative literals in a horn clause, it's a fact, and since we don't
 		//  allow variables that only appear in the head and not the body, we shouldn't hit
@@ -201,13 +200,15 @@ public class RBDB: SQLiteDatabase {
 			default: selectList.append("json_extract(formula, '$[1][\(i-1)].\"\"')")  // not indexed
 			}
 		}
-		createViewSQL +=
+
+		var selects = [
 			"""
 			SELECT \(selectList.joined(separator: ", "))
 			FROM _rule
 			WHERE output_type = '@\(tableName)'
 			  AND negative_literal_count = 0
 			"""
+		]
 
 		let rules = try super.query(
 			sql: """
@@ -218,6 +219,8 @@ public class RBDB: SQLiteDatabase {
 				""")
 
 		let decoder = JSONDecoder()
+		var hasRecursiveRule = false
+
 		for row in rules {
 			if let json = row["json"] as? String {
 				guard let jsonData = json.data(using: .utf8) else {
@@ -225,6 +228,7 @@ public class RBDB: SQLiteDatabase {
 						message: "expected json stored as UTF-8 in _rule.formula")
 				}
 				let rule = try decoder.decode(Formula.self, from: jsonData)
+
 				var columnsQuery: SQLiteCursor? = nil
 				let ruleSQL = try rule.toSQL({ predicateName in
 					guard
@@ -238,9 +242,35 @@ public class RBDB: SQLiteDatabase {
 					}
 					return columns
 				})
-				createViewSQL += " UNION \(ruleSQL)"
+
+				// Check if this rule is recursive (references the same predicate in its body)
+				if rule.isRecursive(for: tableName) {
+					hasRecursiveRule = true
+					// Replace the table name with the CTE name in recursive references
+					selects.append(
+						ruleSQL.replacingOccurrences(of: "[\(tableName)]", with: "\(tableName)_rec")
+					)
+				} else {
+					selects.append(ruleSQL)
+				}
 			}
 		}
+
+		let createViewSQL: String
+		let unionedSelects = selects.joined(separator: "\nUNION\n")
+		if hasRecursiveRule {
+			createViewSQL = """
+				CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS
+				WITH RECURSIVE \(tableName)_rec (\(columnList)) AS (
+				\(unionedSelects)
+				)
+				SELECT * FROM \(tableName)_rec
+				"""
+		} else {
+			createViewSQL =
+				"CREATE TEMP VIEW IF NOT EXISTS \(tableName) (\(columnList)) AS \(unionedSelects)"
+		}
+
 		try super.query(sql: SQL(createViewSQL))
 
 		// Create INSTEAD OF INSERT trigger

@@ -376,3 +376,35 @@ func multipleFactsMultipleInferences() async throws {
 	let names = mammalResults.compactMap { $0["name"] as? String }.sorted()
 	#expect(names == ["Cat", "Dog", "Elephant"], "All animals should be inferred as mammals")
 }
+
+@Test func recursiveRule() async throws {
+	let rbdb = try RBDB(path: ":memory:")
+	try rbdb.query(sql: "CREATE TABLE parent(a TEXT, b TEXT)")
+	try rbdb.query(sql: "CREATE TABLE ancestor(a TEXT, b TEXT)")
+
+	let X = Var()
+	let Y = Var()
+	let Z = Var()
+
+	// Rule 1: ancestor(X, Y) :- parent(X, Y)
+	let rule1 = Formula.hornClause(
+		positive: Predicate(name: "ancestor", arguments: [.variable(X), .variable(Y)]),
+		negative: [Predicate(name: "parent", arguments: [.variable(X), .variable(Y)])]
+	)
+	try rbdb.assert(formula: rule1)
+
+	// Rule 2: ancestor(X, Z) :- parent(X, Y), ancestor(Y, Z)  (2 negative literals)
+	let rule2 = Formula.hornClause(
+		positive: Predicate(name: "ancestor", arguments: [.variable(X), .variable(Z)]),
+		negative: [
+			Predicate(name: "parent", arguments: [.variable(X), .variable(Y)]),
+			Predicate(name: "ancestor", arguments: [.variable(Y), .variable(Z)]),
+		]
+	)
+	try rbdb.assert(formula: rule2)
+
+	try rbdb.query(sql: "INSERT INTO parent(a, b) VALUES ('john', 'douglas')")
+	try rbdb.query(sql: "INSERT INTO parent(a, b) VALUES ('mary', 'john')")
+	let ancestorResults = try rbdb.query(sql: "SELECT * FROM ancestor")
+	#expect(Array(ancestorResults).count == 3)
+}
