@@ -227,4 +227,38 @@ struct SQLiteCursorTests {
 		let thirdResult = Array(rerunCursor2)
 		#expect(thirdResult.count == 1, "Should return Bob's row")
 	}
+
+	@Test("underestimatedCount > 0 iff cursor has rows")
+	func underestimatedCountBasedOnNextRow() async throws {
+		let db = try SQLiteDatabase(path: ":memory:")
+
+		try db.query(sql: "CREATE TABLE test (id INTEGER, name TEXT)")
+		try db.query(sql: "INSERT INTO test (id, name) VALUES (1, 'Alice')")
+		try db.query(sql: "INSERT INTO test (id, name) VALUES (2, 'Bob')")
+
+		// Cursor with results
+		let cursorWithResults = try db.query(sql: SQL("SELECT * FROM test"))
+		#expect(
+			cursorWithResults.underestimatedCount > 0 && cursorWithResults.underestimatedCount <= 2)
+
+		// Cursor with no results
+		let cursorEmpty = try SQLiteCursor(db, sql: SQL("SELECT * FROM test WHERE id = 999"))
+		#expect(cursorEmpty.underestimatedCount == 0)
+	}
+
+	@Test("underestimatedCount == 0 for empty result set")
+	func underestimatedCountEmptyResult() async throws {
+		let db = try SQLiteDatabase(path: ":memory:")
+
+		try db.query(sql: "CREATE TABLE test (id INTEGER, name TEXT)")
+		// No data inserted
+
+		let cursor = try db.query(sql: SQL("SELECT * FROM test"))
+
+		let estimatedCount = cursor.underestimatedCount
+		let actualCount = Array(cursor).count
+
+		#expect(estimatedCount == 0, "underestimatedCount should be 0 for empty result")
+		#expect(actualCount == 0, "Should return 0 rows for empty table")
+	}
 }

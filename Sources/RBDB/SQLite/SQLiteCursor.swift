@@ -250,6 +250,10 @@ public class SQLiteCursor: Sequence, IteratorProtocol {
 		return nil
 	}
 
+	public var underestimatedCount: Int {
+		return nextRow != nil ? 1 : 0
+	}
+
 	func step(statement: PreparedStatement) throws -> Bool {
 		switch sqlite3_step(statement.ptr) {
 		case SQLITE_ROW:
