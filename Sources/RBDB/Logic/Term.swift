@@ -102,7 +102,17 @@ extension Term: Codable {
 	public func encode(to encoder: Encoder) throws {
 		var container = encoder.container(keyedBy: SymbolType.self)
 		switch self {
-		case .variable(let v): try container.encode(v.id, forKey: .variable)
+		case .variable(let v):
+			guard let id = v.id else {
+				throw EncodingError.invalidValue(
+					v,
+					EncodingError.Context(
+						codingPath: encoder.codingPath,
+						debugDescription: "Term must be canonicalized before encoding"
+					)
+				)
+			}
+			try container.encode(id, forKey: .variable)
 		case .boolean(let value): try container.encode(value, forKey: .constant)
 		case .number(let value): try container.encode(value, forKey: .constant)
 		case .string(let value): try container.encode(value, forKey: .constant)

@@ -101,6 +101,25 @@ public class RBDB: SQLiteDatabase {
 		}
 	}
 
+	public func query(formula: Formula) throws -> SQLiteCursor {
+		// Not running `validate` here because we want to allow variables in the head
+		// that aren't in the body in this case. Also not canonicalizing because we
+		// want to preserve the variable names for the columns of the result set.
+
+		var columnsQuery: SQLiteCursor? = nil
+		let sql = try formula.queryIntoSQL({ predicateName in
+			guard
+				let columns = try self.getColumns(for: predicateName, query: &columnsQuery)
+			else {
+				throw SQLiteError.queryError("no such table: \(predicateName)")
+			}
+			return columns
+		})
+
+		// Not calling `super.query` here because we want the view generation
+		return try query(sql: SQL(sql))
+	}
+
 	private func validatePredicatesExist(in formula: Formula) throws {
 		var predicateNames = try formula.getPredicateNames()
 		guard !predicateNames.isEmpty else { return }
@@ -230,7 +249,7 @@ public class RBDB: SQLiteDatabase {
 				let rule = try decoder.decode(Formula.self, from: jsonData)
 
 				var columnsQuery: SQLiteCursor? = nil
-				let ruleSQL = try rule.toSQL({ predicateName in
+				let ruleSQL = try rule.ruleIntoSQL({ predicateName in
 					guard
 						let columns = try self.getColumns(
 							for: predicateName, query: &columnsQuery)

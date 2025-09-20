@@ -43,7 +43,7 @@ fileprivate struct SQLSelect {
 	}
 }
 
-fileprivate struct SQLSelectReducer: SymbolReducer {
+fileprivate struct RuleIntoSQLReducer: SymbolReducer {
 	let getColumnNames: (_ predicateName: String) throws -> [String]
 
 	struct SQLVarRef {
@@ -72,6 +72,7 @@ fileprivate struct SQLSelectReducer: SymbolReducer {
 				let columnNames = try getColumnNames(predicate.name)
 
 				for (i, term) in predicate.arguments.enumerated() {
+					// FIXME: I think other types of terms need to go into the WHERE clause
 					guard case .variable(let v) = term else { continue }
 
 					// If this variable was seen before, create a join condition
@@ -111,10 +112,60 @@ fileprivate struct SQLSelectReducer: SymbolReducer {
 	}
 }
 
+fileprivate struct QueryIntoSQLReducer: SymbolReducer {
+	let getColumnNames: (_ predicateName: String) throws -> [String]
+
+	func reduce(_ prev: SQLSelect, _ formula: Formula) throws -> SQLSelect {
+		var sql = prev
+		switch formula {
+		case .hornClause(positive: let predicate, negative: let negatives):
+			// For queries, we don't allow negative literals for now
+			guard negatives.isEmpty else {
+				throw SQLiteError.queryError("Queries with negative literals are not supported")
+			}
+
+			var table = SQLTable(name: predicate.name, alias: nil)
+			let columnNames = try getColumnNames(predicate.name)
+
+			// Process arguments to build variable mappings and WHERE conditions for constants
+			for (i, term) in predicate.arguments.enumerated() {
+				switch term {
+				case .variable(let v):
+					// Variables become part of the result set
+					// FIXME: Prevent SQL injection via variable name
+					sql.select.append("[\(table.effectiveName)].\(columnNames[i]) AS [\(v)]")
+				case .boolean(let b):
+					let value = b ? "true" : "false"
+					table.conditions.append("[\(table.effectiveName)].\(columnNames[i]) = \(value)")
+				case .number(let n):
+					table.conditions.append("[\(table.effectiveName)].\(columnNames[i]) = \(n)")
+				case .string(let s):
+					// FIXME: Prevent SQL injection
+					table.conditions.append("[\(table.effectiveName)].\(columnNames[i]) = '\(s)'")
+				}
+			}
+
+			if sql.select.isEmpty {
+				sql.select.append("true as sat")
+			}
+			sql.fromTables.append(table)
+		}
+		return sql
+	}
+}
+
 extension Symbol {
-	func toSQL(_ getColumnNames: @escaping (_ predicateName: String) throws -> [String]) throws
+	func ruleIntoSQL(_ getColumnNames: @escaping (_ predicateName: String) throws -> [String])
+		throws
 		-> String
 	{
-		try reduce(.empty, SQLSelectReducer(getColumnNames: getColumnNames)).sql
+		try reduce(.empty, RuleIntoSQLReducer(getColumnNames: getColumnNames)).sql
+	}
+
+	func queryIntoSQL(_ getColumnNames: @escaping (_ predicateName: String) throws -> [String])
+		throws
+		-> String
+	{
+		try reduce(.empty, QueryIntoSQLReducer(getColumnNames: getColumnNames)).sql
 	}
 }
