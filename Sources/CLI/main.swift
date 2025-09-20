@@ -11,11 +11,44 @@
 
 import Foundation
 import RBDB
+import Datalog
 
-let productName = "RBDB Interactive SQL Console"
+let productName = "RBDB Interactive Console"
+
+enum InputMode {
+	case sql
+	case datalog(isQueryMode: Bool)
+
+	var prompt: String {
+		switch self {
+		case .sql: return "sql> "
+		case .datalog(let isQueryMode):
+			return isQueryMode ? "datalog> \u{001B}[90m?- \u{001B}[0m" : "datalog> "
+		}
+	}
+
+	var displayName: String {
+		switch self {
+		case .sql: return "SQL"
+		case .datalog: return "Datalog"
+		}
+	}
+}
+
+func parseLanguage(_ lang: String) -> InputMode? {
+	let normalized = lang.lowercased()
+	switch normalized {
+	case "s", "sql":
+		return .sql
+	case "d", "datalog":
+		return .datalog(isQueryMode: false)
+	default:
+		return nil
+	}
+}
 
 func printUsage() {
-	print("Usage: sql [options] [database_path]")
+	print("Usage: rbdb [options] [database_path]")
 	print("  \(productName)")
 	print("")
 	print("Arguments:")
@@ -24,61 +57,61 @@ func printUsage() {
 	print("")
 	print("Options:")
 	print("  --help               Show this help message")
-	print("  -f | --file <path>   Execute the SQL commands from the given file")
+	print("  -f | --file <path>   Execute the commands from the given file")
+	print("  -l | --lang <lang>   Set default language: s[ql] or d[atalog] (default: sql)")
 	print("")
 	print("Commands:")
 	print("  .exit                Exit the console")
 	print("  .schema              Show database schema")
+	print("")
+	print("Interactive Mode:")
+	print("  Shift+Tab            Switch between SQL and Datalog modes")
+	print("  ? (in Datalog)       Enter query mode (not implemented)")
 }
 
 func displaySchema(database: SQLiteDatabase) {
 	do {
 		let results = try database.query(
-			sql:
-				"SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view', 'index', 'trigger') ORDER BY type, name"
+			sql: "SELECT name, json(column_names) as column_names FROM _predicate ORDER BY name"
 		)
 
 		var hasSchema = false
-		var currentType = ""
+		print("-- TABLES")
+		print(String(repeating: "-", count: 50))
+
 		for row in results {
 			hasSchema = true
-			let type = row["type"] as? String ?? ""
 			let name = row["name"] as? String ?? ""
-			let sql = row["sql"] as? String ?? ""
+			let columnNamesJson = row["column_names"] as? String ?? ""
 
-			if type != currentType {
-				currentType = type
-				print("\n-- \(type.uppercased())S")
-				print(String(repeating: "-", count: 50))
+			// Parse column names from JSON
+			var columnNames: [String] = []
+			if let data = columnNamesJson.data(using: .utf8) {
+				columnNames = (try? JSONDecoder().decode([String].self, from: data)) ?? []
 			}
 
-			print("\(name):")
-			if !sql.isEmpty {
-				print("  \(sql)")
-			}
-			print()
+			// Generate synthetic CREATE TABLE statement
+			let columnDefinitions = columnNames.map { "[\($0)]" }.joined(separator: ", ")
+			let createTableSQL = "CREATE TABLE [\(name)] (\(columnDefinitions));"
+
+			print("\(createTableSQL)")
 		}
+
 		if !hasSchema {
-			print("No schema objects found.")
+			print("No tables found.")
 		}
 	} catch {
 		print("Error displaying schema: \(error)")
 	}
 }
 
-func executeCommandsFromFile(filePath: String, database: SQLiteDatabase) -> Bool {
+func executeCommandsFromFile(filePath: String, database: RBDB, mode: InputMode) -> Bool {
 	do {
 		let content = try String(contentsOfFile: filePath, encoding: .utf8)
 
-		print("Executing commands from file: \(filePath)")
+		print("Executing commands from file: \(filePath) (mode: \(mode.displayName))")
 
-		do {
-			let results = try database.query(sql: SQL(content))
-			printTable(results)
-		} catch {
-			print("Error executing commands: \(error)")
-			return false  // Stop execution on error
-		}
+		executeCommand(content, database: database, mode: mode)
 
 		print("File execution completed.")
 		return true  // Continue to interactive mode
@@ -210,10 +243,10 @@ func restoreTerminal() {
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &cooked)
 }
 
-func redrawLineWithCursor(line: String, cursorPos: Int) {
+func redrawLineWithCursor(line: String, cursorPos: Int, mode: InputMode) {
 	// Clear the line and redraw with cursor positioning
 	print("\r\u{001B}[K", terminator: "")
-	print("sql> \(line)", terminator: "")
+	print("\(mode.prompt)\(line)", terminator: "")
 
 	// Move cursor to the correct position
 	if cursorPos < line.count {
@@ -224,7 +257,9 @@ func redrawLineWithCursor(line: String, cursorPos: Int) {
 	fflush(stdout)
 }
 
-func readLineWithHistory(history: inout [String], historyIndex: inout Int)
+func readLineWithHistory(
+	history: inout [(String, InputMode)], historyIndex: inout Int, mode: inout InputMode
+)
 	-> String?
 {
 	var line = ""
@@ -244,9 +279,9 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int)
 						historyIndex -= 1
 						// Clear current line
 						print("\r\u{001B}[K", terminator: "")
-						line = history[historyIndex]
+						(line, mode) = history[historyIndex]
 						cursorPos = line.count
-						print("sql> \(line)", terminator: "")
+						print("\(mode.prompt)\(line)", terminator: "")
 						fflush(stdout)
 					}
 				case 66:  // Down arrow
@@ -254,9 +289,9 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int)
 						historyIndex += 1
 						// Clear current line
 						print("\r\u{001B}[K", terminator: "")
-						line = history[historyIndex]
+						(line, mode) = history[historyIndex]
 						cursorPos = line.count
-						print("sql> \(line)", terminator: "")
+						print("\(mode.prompt)\(line)", terminator: "")
 						fflush(stdout)
 					} else if historyIndex == history.count - 1 {
 						historyIndex = history.count
@@ -264,18 +299,18 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int)
 						print("\r\u{001B}[K", terminator: "")
 						line = ""
 						cursorPos = 0
-						print("sql> ", terminator: "")
+						print(mode.prompt, terminator: "")
 						fflush(stdout)
 					}
 				case 67:  // Right arrow
 					if cursorPos < line.count {
 						cursorPos += 1
-						redrawLineWithCursor(line: line, cursorPos: cursorPos)
+						redrawLineWithCursor(line: line, cursorPos: cursorPos, mode: mode)
 					}
 				case 68:  // Left arrow
 					if cursorPos > 0 {
 						cursorPos -= 1
-						redrawLineWithCursor(line: line, cursorPos: cursorPos)
+						redrawLineWithCursor(line: line, cursorPos: cursorPos, mode: mode)
 					}
 				case 51:  // Delete key (ESC[3~)
 					let next3 = getchar()
@@ -289,10 +324,29 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int)
 							)
 							redrawLineWithCursor(
 								line: line,
-								cursorPos: cursorPos
+								cursorPos: cursorPos,
+								mode: mode
 							)
 						}
 					}
+				case 90:  // Shift+Tab (ESC[Z)
+					// Switch between SQL and Datalog modes
+					switch mode {
+					case .sql:
+						mode = .datalog(isQueryMode: false)
+					case .datalog:
+						mode = .sql
+					}
+					// Clear current line and redraw with new mode
+					print("\r\u{001B}[K", terminator: "")
+					print(mode.prompt, terminator: "")
+					print("\(line)", terminator: "")
+					// Move cursor back to correct position
+					if cursorPos < line.count {
+						let moveBack = line.count - cursorPos
+						print("\u{001B}[\(moveBack)D", terminator: "")
+					}
+					fflush(stdout)
 				default:
 					break
 				}
@@ -301,27 +355,45 @@ func readLineWithHistory(history: inout [String], historyIndex: inout Int)
 			print()
 			return line
 		} else if char == 127 {  // Backspace
+			// Exit query mode if line is empty in datalog mode
+			if case .datalog(isQueryMode: true) = mode, line.isEmpty {
+				mode = .datalog(isQueryMode: false)
+			}
+
 			if cursorPos > 0 {
 				line.remove(
 					at: line.index(line.startIndex, offsetBy: cursorPos - 1)
 				)
 				cursorPos -= 1
-				redrawLineWithCursor(line: line, cursorPos: cursorPos)
 			}
+
+			redrawLineWithCursor(line: line, cursorPos: cursorPos, mode: mode)
 		} else if char >= 32 && char <= 126 {  // Printable characters
 			let character = Character(UnicodeScalar(Int(char))!)
-			line.insert(
-				character,
-				at: line.index(line.startIndex, offsetBy: cursorPos)
-			)
-			cursorPos += 1
-			redrawLineWithCursor(line: line, cursorPos: cursorPos)
+
+			// Special handling for '?' in datalog mode
+			if case .datalog(let isQueryMode) = mode, !isQueryMode, character == "?",
+				cursorPos == 0, line.isEmpty
+			{
+				mode = .datalog(isQueryMode: true)
+				// Redraw the line with the new query mode prompt
+				print("\r\u{001B}[K", terminator: "")
+				print(mode.prompt, terminator: "")
+				fflush(stdout)
+			} else {
+				line.insert(
+					character,
+					at: line.index(line.startIndex, offsetBy: cursorPos)
+				)
+				cursorPos += 1
+				redrawLineWithCursor(line: line, cursorPos: cursorPos, mode: mode)
+			}
 		} else if char == 1 {  // Ctrl+A (beginning of line)
 			cursorPos = 0
-			redrawLineWithCursor(line: line, cursorPos: cursorPos)
+			redrawLineWithCursor(line: line, cursorPos: cursorPos, mode: mode)
 		} else if char == 5 {  // Ctrl+E (end of line)
 			cursorPos = line.count
-			redrawLineWithCursor(line: line, cursorPos: cursorPos)
+			redrawLineWithCursor(line: line, cursorPos: cursorPos, mode: mode)
 		} else if char == 4 {  // Ctrl+D (EOF)
 			if line.isEmpty {
 				print()
@@ -344,6 +416,7 @@ func main() {
 	var dbPath: String = ":memory:"
 	var isInMemory: Bool = true
 	var sqlFile: String? = nil
+	var defaultMode: InputMode = .sql
 
 	var i = 1
 	while i < args.count {
@@ -359,6 +432,31 @@ func main() {
 			i += 2
 		} else if arg.hasPrefix("--file=") {
 			sqlFile = String(arg.dropFirst(7))
+			i += 1
+		} else if arg == "--lang" || arg == "-l" {
+			if i + 1 >= args.count {
+				print("Error: --lang requires a language argument")
+				printUsage()
+				exit(1)
+			}
+			let langArg = args[i + 1]
+			if let mode = parseLanguage(langArg) {
+				defaultMode = mode
+			} else {
+				print("Error: Unknown language '\(langArg)'. Use 's'/'sql' or 'd'/'datalog'")
+				printUsage()
+				exit(1)
+			}
+			i += 2
+		} else if arg.hasPrefix("--lang=") {
+			let langArg = String(arg.dropFirst(7))
+			if let mode = parseLanguage(langArg) {
+				defaultMode = mode
+			} else {
+				print("Error: Unknown language '\(langArg)'. Use 's'/'sql' or 'd'/'datalog'")
+				printUsage()
+				exit(1)
+			}
 			i += 1
 		} else if !arg.hasPrefix("-") {
 			// This is the database path
@@ -399,7 +497,8 @@ func main() {
 	if let sqlFile = sqlFile {
 		let shouldContinue = executeCommandsFromFile(
 			filePath: sqlFile,
-			database: database
+			database: database,
+			mode: defaultMode
 		)
 		if !shouldContinue {
 			if isInteractive {
@@ -413,16 +512,17 @@ func main() {
 	}
 
 	if isInteractive {
-		runInteractiveMode(database: database)
+		runInteractiveMode(database: database, defaultMode: defaultMode)
 	} else {
-		runNonInteractiveMode(database: database)
+		runNonInteractiveMode(database: database, defaultMode: defaultMode)
 	}
 }
 
-func runInteractiveMode(database: RBDB) {
+func runInteractiveMode(database: RBDB, defaultMode: InputMode) {
 	// Command history
-	var history: [String] = []
+	var history: [(String, InputMode)] = []
 	var historyIndex = 0
+	var mode: InputMode = defaultMode
 
 	// Setup raw terminal mode for arrow key handling
 	setupRawMode()
@@ -435,13 +535,14 @@ func runInteractiveMode(database: RBDB) {
 
 	// Main loop
 	while true {
-		print("sql> ", terminator: "")
+		print(mode.prompt, terminator: "")
 		fflush(stdout)
 
 		guard
 			let input = readLineWithHistory(
 				history: &history,
-				historyIndex: &historyIndex
+				historyIndex: &historyIndex,
+				mode: &mode
 			)
 		else {
 			break
@@ -464,13 +565,13 @@ func runInteractiveMode(database: RBDB) {
 		}
 
 		// Add to history if it's not empty and not the same as the last command
-		if !command.isEmpty && (history.isEmpty || history.last != command) {
-			history.append(command)
+		if !command.isEmpty && (history.isEmpty || history.last?.0 != command) {
+			history.append((command, mode))
 		}
 		historyIndex = history.count
 
-		// Execute SQL command
-		executeCommand(command, database: database)
+		// Execute command based on mode
+		executeCommand(command, database: database, mode: mode)
 		print()
 	}
 
@@ -480,7 +581,7 @@ func runInteractiveMode(database: RBDB) {
 	print("Goodbye!")
 }
 
-func runNonInteractiveMode(database: RBDB) {
+func runNonInteractiveMode(database: RBDB, defaultMode: InputMode) {
 	// Read from stdin line by line
 	while let line = readLine() {
 		let command = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -498,14 +599,28 @@ func runNonInteractiveMode(database: RBDB) {
 			continue
 		}
 
-		executeCommand(command, database: database)
+		executeCommand(command, database: database, mode: defaultMode)
 	}
 }
 
-func executeCommand(_ command: String, database: RBDB) {
+func executeCommand(_ command: String, database: RBDB, mode: InputMode) {
 	do {
-		let results = try database.query(sql: SQL(command))
-		printTable(results)
+		switch mode {
+		case .sql:
+			let results = try database.query(sql: SQL(command))
+			printTable(results)
+
+		case .datalog(let isQueryMode):
+			let parser = DatalogParser()
+			let formula = try parser.parse(command)
+			if isQueryMode {
+				let results = try database.query(formula: formula)
+				printTable(results)
+			} else {
+				try database.assert(formula: formula)
+				print("Asserted.")
+			}
+		}
 	} catch {
 		print("Error: \(error)")
 	}

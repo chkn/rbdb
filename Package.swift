@@ -18,8 +18,8 @@ let package = Package(
 			name: "Datalog",
 			targets: ["Datalog"]),
 		.executable(
-			name: "sql",
-			targets: ["SQLCLITool"]),
+			name: "rbdb",
+			targets: ["CLI"]),
 	],
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-parsing.git", from: "0.14.1")
@@ -41,8 +41,8 @@ let package = Package(
 			]
 		),
 		.executableTarget(
-			name: "SQLCLITool",
-			dependencies: ["RBDB"]
+			name: "CLI",
+			dependencies: ["RBDB", "Datalog"]
 		),
 		.testTarget(
 			name: "RBDBTests",

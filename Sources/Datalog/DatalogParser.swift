@@ -11,12 +11,14 @@ public struct DatalogParser: ParserPrinter {
 			if let existingVar = variables[name] {
 				return existingVar
 			}
-			let newVar = Var()
+			let newVar = Var(name)
 			variables[name] = newVar
 			return newVar
 		}
 	}
 	private let ctx = Context()
+
+	public init() {}
 
 	public var body: some ParserPrinter<Substring, Formula> {
 		ParsePrint {
@@ -31,7 +33,8 @@ public struct DatalogParser: ParserPrinter {
 
 extension DatalogParser {
 	private var hornClauseParser: some ParserPrinter<Substring, Formula> {
-		let emptyPredicates: [Predicate] = []  // FIXME: Swift really want a type annotation for this
+		// FIXME: Swift really want a type annotation for this
+		let emptyPredicates: [Predicate] = []
 		return ParsePrint(.case(Formula.hornClause)) {
 			// Head
 			predicateParser
