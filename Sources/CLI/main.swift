@@ -380,6 +380,11 @@ func readLineWithHistory(
 				print("\r\u{001B}[K", terminator: "")
 				print(mode.prompt, terminator: "")
 				fflush(stdout)
+			} else if case .datalog(let isQueryMode) = mode, isQueryMode, character == "-",
+				cursorPos == 0, line.isEmpty
+			{
+				// Ignore "-" typed right after "?" (that switched us into query mode and gave an implicit "?-" prompt)
+				// This prevents a superfluous "-" if you paste a query like "?- foo(X)" at a non-query-mode datalog prompt
 			} else {
 				line.insert(
 					character,
