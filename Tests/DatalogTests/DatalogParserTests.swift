@@ -197,3 +197,32 @@ func roundTripParsingAndPrinting() throws {
 		#expect(parsed == reparsed)
 	}
 }
+
+@Test("Parse facts with single-quoted strings")
+func parseFactsWithSingleQuotedStrings() throws {
+	let parser = DatalogParser()
+
+	// Test simple fact with single-quoted string: user('Alice')
+	let result1 = try parser.parse("user('Alice')")
+	let expected1 = Formula.hornClause(
+		positive: Predicate(name: "user", arguments: [.string("Alice")]),
+		negative: []
+	)
+	#expect(result1 == expected1)
+
+	// Test fact with mixed quotes: name('Alice', "Smith")
+	let result2 = try parser.parse("name('Alice', \"Smith\")")
+	let expected2 = Formula.hornClause(
+		positive: Predicate(name: "name", arguments: [.string("Alice"), .string("Smith")]),
+		negative: []
+	)
+	#expect(result2 == expected2)
+
+	// Test fact with only single quotes: person('John', 'Doe')
+	let result3 = try parser.parse("person('John', 'Doe')")
+	let expected3 = Formula.hornClause(
+		positive: Predicate(name: "person", arguments: [.string("John"), .string("Doe")]),
+		negative: []
+	)
+	#expect(result3 == expected3)
+}

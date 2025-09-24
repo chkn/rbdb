@@ -128,10 +128,19 @@ extension DatalogParser {
 	}
 
 	private var quotedStringParser: some ParserPrinter<Substring, String> {
-		ParsePrint {
-			"\""
-			Prefix { $0 != "\"" }.map(.string)
-			"\""
+		OneOf {
+			// Single-quoted strings (parse only, always print as double-quoted)
+			Parse {
+				"'"
+				Prefix { $0 != "'" }.map(.string)
+				"'"
+			}
+			// Double-quoted strings (default for printing)
+			ParsePrint {
+				"\""
+				Prefix { $0 != "\"" }.map(.string)
+				"\""
+			}
 		}
 	}
 
