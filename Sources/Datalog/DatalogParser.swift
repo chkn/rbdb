@@ -53,8 +53,6 @@ extension DatalogParser {
 				}
 			}.map(.orDefault(emptyPredicates))
 
-			Whitespace()
-
 			// Optional period at the end
 			".".replaceError(with: ())
 		}
@@ -82,7 +80,6 @@ extension DatalogParser {
 				Whitespace().printing(" ".utf8)
 			}
 
-			Whitespace()
 			")"
 		}
 	}
