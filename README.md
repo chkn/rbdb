@@ -1,20 +1,23 @@
 # RBDB
 
-A relational database built on top of SQLite with integrated first-order logic capabilities.
+A relational database built on top of SQLite with integrated Datalog capabilities.
 
 ## Installation
 
 ### Swift Package Manager
 
+**Note:** RBDB is under active development and breaking changes may occur. We recommend pinning to the latest commit hash until we start making versioned releases.
+
 Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/chkn/rbdb.git", from: "1.0.0")
+    .package(url: "https://github.com/chkn/rbdb.git", revision: "COMMIT_HASH_HERE")
 ]
 ```
+### SQLite Dependency
 
-Known to work with system SQLite on macOS 26. Otherwise, you will need a SQLite built with `SQLITE_ENABLE_NORMALIZE` and a module map (see Dockerfile for an example).
+RBDB requires a SQLite library built with `SQLITE_ENABLE_NORMALIZE`. The system SQLite on macOS 26 is known to work. Otherwise, you'll need to build SQLite and supply a module map (see Dockerfile for an example).
 
 ## Usage
 
@@ -26,19 +29,61 @@ import RBDB
 let db = try RBDB(path: "database.db")
 
 // Defines a `user` predicate
-try db.query("CREATE TABLE user(name)")
+try db.query(sql: "CREATE TABLE user(name)")
 ```
 
 ### Assert facts
 
-You can assert simple facts using either SQL or the `Formula` type:
+You can assert simple facts in three equivalent ways:
 
 ```swift
+// 1. Create Formula directly
 let formula1 = Formula.predicate(Predicate(name: "user", arguments: [.string("Alice")]))
 try db.assert(formula: formula1)
 
-// The above is equivalent to:
-try db.query("INSERT INTO user(name) VALUES ('Alice')")
+// 2. Parse datalog into Formula
+import Datalog
+let formula2 = try DatalogParser().parse("user('Alice')")
+assert(formula1 == formula2)  // true
+try db.assert(formula: formula2) // fails if formula1 was already asserted
+
+// 3. SQL INSERT
+try db.query(sql: "INSERT INTO user(name) VALUES ('Alice')") // fails if either formula above was already asserted
+```
+
+All three approaches above are equivalent ways of asserting the same fact. As noted in the code comments, you can only assert a fact once. Subsequent attempts to assert an equivalent fact will trigger a unique constraint failure in the database.
+
+### Rules
+
+RBDB supports logical rules restricted to safe Horn clauses. A safe Horn clause has at most one positive literal (the head) and all variables in the head must appear in at least one positive literal in the body.
+
+Here's a simple example showing how to define rules and query them:
+
+```swift
+import RBDB
+import Datalog
+
+let dl = DatalogParser()
+let db = try RBDB(path: "family.db")
+
+// Create tables for our predicates
+try db.query(sql: "CREATE TABLE parent(parent, child)")
+try db.query(sql: "CREATE TABLE grandparent(grandparent, grandchild)")
+
+// Assert some facts using datalog syntax
+try db.assert(formula: try dl.parse("parent('John', 'Mary')"))
+try db.assert(formula: try dl.parse("parent('Mary', 'Tom')"))
+try db.assert(formula: try dl.parse("parent('Bob', 'Alice')"))
+
+// Define a rule: grandparent(X, Z) :- parent(X, Y), parent(Y, Z)
+let rule = try dl.parse("grandparent(X, Z) :- parent(X, Y), parent(Y, Z)")
+try db.assert(formula: rule)
+
+// Query back using SQL
+let result = try db.query(sql: "SELECT * FROM grandparent")
+// grandchild | grandparent
+// -----------+------------
+// Tom        | John
 ```
 
 ### Canonicalize logically equivalent formulas
@@ -51,32 +96,42 @@ let f2 = Formula.predicate(Predicate(name: "User", arguments: [.variable(y)]))
 assert(f1.canonicalize() == f2.canonicalize())  // true
 ```
 
-### SQL CLI Tool
+### Interactive CLI Tool
 
-The included `sql` command provides an interactive console:
+The included `rbdb` command provides an interactive console that supports both SQL and datalog modes. Use Shift+Tab to switch between modes:
 
 ```bash
 # Interactive mode
-swift run sql database.db
+swift run rbdb database.db
 
 # Execute file
-swift run sql -f script.sql database.db
+swift run rbdb -f script.sql database.db
 
 # In-memory database
-swift run sql
+swift run rbdb
 ```
 
 Example session:
 ```sql
-sql> CREATE TABLE products (id, name, price);
-sql> INSERT INTO products VALUES (1, 'Widget', 9.99);
-sql> SELECT * FROM products;
+sql> CREATE TABLE product (id, name, price);
+sql> INSERT INTO product VALUES (1, 'Widget', 9.99);
+sql> SELECT * FROM product;
 ┌────┬────────┬───────┐
 │ id │ name   │ price │
 ├────┼────────┼───────┤
 │ 1  │ Widget │ 9.99  │
 └────┴────────┴───────┘
+
+# Switch to datalog mode with Shift+Tab
+datalog> ?- product(ID, Name, Price).
+┌────┬────────┬───────┐
+│ ID │ Name   │ Price │
+├────┼────────┼───────┤
+│ 1  │ Widget │ 9.99  │
+└────┴────────┴───────┘
 ```
+
+Note that datalog variables must start with an uppercase letter, but the results are equivalent between SQL and datalog queries.
 
 ## Docker & Containerization
 
@@ -150,24 +205,12 @@ swift test
 
 ### Code Formatting
 
-The project uses `swift-format` for consistent code style:
+The project uses `swift-format` for consistent code style. Run this to format all source files:
 
 ```bash
 swift format -i -r .
 ```
 
-### Project Structure
-
-```
-Sources/
-├── RBDB/                   # Core library
-│   ├── Logic/              # First-order logic implementation
-│   ├── SQLite/             # Database layer
-│   ├── Utils/              # Utility functions
-│   └── schema.sql          # Internal database schema
-├── SQLCLITool/             # Interactive CLI tool
-└── Tests/                  # Test suite
-```
 
 ## Contributing
 
@@ -186,5 +229,5 @@ Sources/
 
 ## License
 
-[Specify your license here]
+[MIT](LICENSE)
 

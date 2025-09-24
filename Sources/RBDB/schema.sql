@@ -9,13 +9,14 @@
 --  but in the future I imagine we'll use it for a couple things:
 --    1. When attaching multiple database files and merging them.
 --    2. When we discover that different entities are actually the same
---        thing and we want to merge them. If we ever want to do that,
---        we'll need to ensure we always use the UUID in our generated
---        views if there are duplicate values.
+--        thing and we want to merge them. When we do this, we'll keep
+--        the UUID with the oldest timestamp.
 CREATE TABLE IF NOT EXISTS _entity (
     internal_entity_id INTEGER PRIMARY KEY,
     entity_id BLOB NOT NULL DEFAULT (uuidv7())
 ) STRICT;
+
+-- FIXME: Table of entity links to external data sources (e.g. reminder linked to Reminders app ID)
 
 CREATE TABLE IF NOT EXISTS _predicate (
     internal_entity_id INTEGER PRIMARY KEY REFERENCES _entity,
