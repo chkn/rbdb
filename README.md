@@ -63,7 +63,6 @@ Here's a simple example showing how to define rules and query them:
 import RBDB
 import Datalog
 
-let dl = DatalogParser()
 let db = try RBDB(path: "family.db")
 
 // Create tables for our predicates
@@ -71,13 +70,12 @@ try db.query(sql: "CREATE TABLE parent(parent, child)")
 try db.query(sql: "CREATE TABLE grandparent(grandparent, grandchild)")
 
 // Assert some facts using datalog syntax
-try db.assert(formula: try dl.parse("parent('John', 'Mary')"))
-try db.assert(formula: try dl.parse("parent('Mary', 'Tom')"))
-try db.assert(formula: try dl.parse("parent('Bob', 'Alice')"))
+try db.assert(datalog: "parent('John', 'Mary')")
+try db.assert(datalog: "parent('Mary', 'Tom')")
+try db.assert(datalog: "parent('Bob', 'Alice')")
 
 // Define a rule: grandparent(X, Z) :- parent(X, Y), parent(Y, Z)
-let rule = try dl.parse("grandparent(X, Z) :- parent(X, Y), parent(Y, Z)")
-try db.assert(formula: rule)
+try db.assert(datalog: "grandparent(X, Z) :- parent(X, Y), parent(Y, Z)")
 
 // Query back using SQL
 let result = try db.query(sql: "SELECT * FROM grandparent")
