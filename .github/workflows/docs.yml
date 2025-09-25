@@ -4,9 +4,6 @@ on:
   push:
     branches: [ main ]
 
-env:
-  out_dir: "${{ runner.temp }}/docs"
-
 jobs:
   build:
     runs-on: macos-26
@@ -19,22 +16,25 @@ jobs:
       uses: actions/configure-pages@v5
 
     - name: Build Docs
+      id: docs
       run: |
-        mkdir -p ${{ env.out_dir }} && \
+        OUT_DIR="$RUNNER_TEMP/docs"
+        mkdir -p "$OUT_DIR" && \
         swift package \
-        --allow-writing-to-directory ${{ env.out_dir }} \
+        --allow-writing-to-directory "$OUT_DIR" \
         generate-documentation \
         --target RBDB \
         --disable-indexing \
         --transform-for-static-hosting \
         --hosting-base-path "${{ steps.pages.outputs.base_path }}" \
-        --output-path ${{ env.out_dir }}
+        --output-path "$OUT_DIR" && \
+        echo "out_dir=$OUT_DIR" >> "$GITHUB_OUTPUT"
 
     - name: Upload static files as artifact
       id: deployment
       uses: actions/upload-pages-artifact@v4
       with:
-        path: ${{ env.out_dir }}
+        path: ${{ steps.docs.outputs.out_dir }}
 
   deploy:
     environment:
