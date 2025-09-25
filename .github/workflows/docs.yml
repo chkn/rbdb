@@ -1,0 +1,48 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  out_dir: "${{ runner.temp }}/docs"
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Pages
+      id: pages
+      uses: actions/configure-pages@v5
+
+    - name: Build Docs
+      run: |
+        mkdir -p ${{ env.out_dir }} && \
+        swift package \
+        --allow-writing-to-directory ${{ env.out_dir }} \
+        generate-documentation \
+        --target RBDB \
+        --disable-indexing \
+        --transform-for-static-hosting \
+        --hosting-base-path "${{ steps.pages.outputs.base_path }}" \
+        --output-path ${{ env.out_dir }}
+
+    - name: Upload static files as artifact
+      id: deployment
+      uses: actions/upload-pages-artifact@v4
+      with:
+        path: ${{ env.out_dir }}
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

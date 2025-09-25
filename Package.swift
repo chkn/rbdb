@@ -22,6 +22,7 @@ let package = Package(
 			targets: ["CLI"]),
 	],
 	dependencies: [
+		.package(url: "https://github.com/apple/swift-docc-plugin.git", from: "1.4.5"),
 		.package(url: "https://github.com/pointfreeco/swift-parsing.git", from: "0.14.1")
 	],
 	targets: [
